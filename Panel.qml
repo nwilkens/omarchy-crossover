@@ -557,8 +557,9 @@ Panel {
               label: "Mac keys"
               value: !crossover.macKeyboard ? "Off"
                      : crossover.macKeyboardState === "applied" ? "Cmd acts as Ctrl"
-                     : crossover.macKeyboardState === "unsupported" ? "Compositor kept its own keymap"
-                     : "Waiting for a link"
+                     : crossover.macKeyboardState === "unsupported" ? "Compositor refused the rule"
+                     : crossover.macKeyboardState === "armed" ? "Ready, waiting for input"
+                     : "Starting"
               warn: crossover.macKeyboard && crossover.macKeyboardState === "unsupported"
             }
 

@@ -104,7 +104,17 @@ Two things it cannot do for you:
 
 1. macOS will not let anything read your mouse and keyboard until you grant
    permission. System Settings > Privacy & Security, under **Accessibility**
-   and again under **Input Monitoring**.
+   and again under **Input Monitoring**, adding `~/.cargo/bin/lan-mouse`.
+
+   The grant is per binary, and a LaunchAgent gets no prompt: started by
+   launchd it simply logs `accessibility permission is required` and gives up.
+   So run it once from Terminal first, approve both prompts, then load the
+   agent:
+
+   ```bash
+   lan-mouse --emulation-backend mac-os daemon   # approve the prompts, Ctrl-C
+   launchctl kickstart -p gui/$UID/com.nwilkens.crossover.lan-mouse
+   ```
 2. lan-mouse needs to know which edge the Omarchy machine sits on. Set that in
    the lan-mouse window.
 

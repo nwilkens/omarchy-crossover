@@ -34,11 +34,17 @@ Item {
   property string enteredPosition: ""
   property string enteredPeer: ""
 
-  // "off" while disabled, "applied" once Hyprland confirms the remap landed on
-  // the virtual keyboard, "unsupported" when the compositor ignored it.
+  // "off" when disabled, "armed" once the device rule is registered but the
+  // virtual keyboard has not appeared yet, "applied" once Hyprland reports the
+  // rule on the live device, "unsupported" if the compositor ignored it.
   property string macKeyboardState: "off"
-  property string virtualKeyboardName: ""
-  property var keyboardsBeforeStart: []
+  property string globalKbOptions: ""
+  // Hyprland names virtual keyboards "hl-virtual-keyboard-<client>", and the
+  // client here is always lan-mouse. Registering the rule by name means it
+  // applies the moment the device appears, which matters because the device
+  // only exists while a peer is actually sending input.
+  readonly property string virtualKeyboardName: "hl-virtual-keyboard-lan-mouse"
+  readonly property string macKeyOption: "ctrl:swap_lwin_lctl"
 
   property int connectAttempts: 0
   readonly property bool wantLink: installed && socketPath() !== ""
@@ -90,14 +96,11 @@ Item {
     if (!installed || daemonProcess.running) return
     lastError = ""
     actionStatus = "Starting"
-    // Snapshot the keyboards Hyprland already knows so the virtual one the
-    // daemon is about to create can be identified by difference.
-    captureKeyboardsThen(function() {
-      // Backend selection is a top-level flag, so it has to precede the
-      // subcommand or lan-mouse exits with a usage error.
-      daemonProcess.command = ["lan-mouse", "--emulation-backend", root.emulationBackend, "daemon"]
-      daemonProcess.running = true
-    })
+    // Backend selection is a top-level flag, so it has to precede the
+    // subcommand or lan-mouse exits with a usage error.
+    daemonProcess.command = ["lan-mouse", "--emulation-backend", root.emulationBackend, "daemon"]
+    daemonProcess.running = true
+    applyMacKeyboard()
   }
 
   function stop() {
@@ -206,9 +209,6 @@ Item {
         break
       case "EmulationStatus":
         emulationEnabled = Model.statusToBool(event.value)
-        // The virtual keyboard only exists once emulation is live, so this is
-        // the earliest moment the remap can be applied.
-        if (emulationEnabled) identifyVirtualKeyboard()
         break
       case "PublicKeyFingerprint":
         fingerprint = String(event.value || "")
@@ -262,17 +262,29 @@ Item {
     crossingTimer.restart()
   }
 
-  function captureKeyboardsThen(next) {
-    root._afterDevices = next
-    devicesProcess.mode = "snapshot"
-    devicesProcess.command = ["hyprctl", "-j", "devices"]
-    devicesProcess.running = true
+  function keyboardOptions(withSwap) {
+    var parts = []
+    var base = String(globalKbOptions || "").split(",")
+    for (var i = 0; i < base.length; i++) {
+      var option = base[i].trim()
+      if (option !== "" && option !== macKeyOption) parts.push(option)
+    }
+    if (withSwap) parts.push(macKeyOption)
+    return parts.join(",")
   }
-  property var _afterDevices: null
-  property string _clipdStderr: ""
 
-  function identifyVirtualKeyboard() {
-    devicesProcess.mode = "identify"
+  // Hyprland 0.56 moved to a Lua config parser, and `hyprctl keyword` is
+  // refused outright by it. Device rules go through hl.device instead.
+  function applyMacKeyboard() {
+    if (!installed) return
+    var options = keyboardOptions(macKeyboard)
+    var lua = 'hl.device({ name = "' + virtualKeyboardName + '", kb_options = "' + options + '" })'
+    keywordProcess.mode = macKeyboard ? "apply" : "clear"
+    keywordProcess.command = ["hyprctl", "eval", lua]
+    keywordProcess.running = true
+  }
+
+  function verifyMacKeyboard() {
     devicesProcess.command = ["hyprctl", "-j", "devices"]
     devicesProcess.running = true
   }
@@ -284,29 +296,6 @@ Item {
     } catch (e) {
       return []
     }
-  }
-
-  function applyMacKeyboard() {
-    if (virtualKeyboardName === "") return
-    if (!macKeyboard) {
-      keywordProcess.mode = "clear"
-      keywordProcess.command = ["hyprctl", "keyword",
-                                "device[" + virtualKeyboardName + "]:kb_options", ""]
-      keywordProcess.running = true
-      macKeyboardState = "off"
-      return
-    }
-    keywordProcess.mode = "apply"
-    keywordProcess.command = ["hyprctl", "keyword",
-                              "device[" + virtualKeyboardName + "]:kb_options",
-                              "ctrl:swap_lwin_lctl"]
-    keywordProcess.running = true
-  }
-
-  function verifyMacKeyboard() {
-    devicesProcess.mode = "verify"
-    devicesProcess.command = ["hyprctl", "-j", "devices"]
-    devicesProcess.running = true
   }
 
   function refreshMonitors() {
@@ -338,6 +327,8 @@ Item {
   onClipboardSyncChanged: clipboardSync ? retryClipd() : stopClipd()
 
   Component.onCompleted: {
+    kbOptionsProcess.command = ["hyprctl", "getoption", "input:kb_options"]
+    kbOptionsProcess.running = true
     whichProcess.command = ["which", "lan-mouse"]
     whichProcess.running = true
     clipdWhichProcess.command = ["test", "-x", clipdBinary()]
@@ -449,43 +440,23 @@ Item {
 
   Process {
     id: devicesProcess
-    property string mode: "snapshot"
     running: false
     command: []
     stdout: StdioCollector {
-      id: devicesStdout
       waitForEnd: true
       onStreamFinished: {
         var keyboards = root.parseKeyboards(text)
-        if (devicesProcess.mode === "snapshot") {
-          root.keyboardsBeforeStart = keyboards.map(function(k) { return String(k.name || "") })
-          if (root._afterDevices) {
-            var next = root._afterDevices
-            root._afterDevices = null
-            next()
-          }
-        } else if (devicesProcess.mode === "identify") {
-          for (var i = 0; i < keyboards.length; i++) {
-            var name = String(keyboards[i].name || "")
-            if (name === "") continue
-            if (root.keyboardsBeforeStart.indexOf(name) < 0) {
-              root.virtualKeyboardName = name
-              root.applyMacKeyboard()
-              return
-            }
-          }
-        } else if (devicesProcess.mode === "verify") {
-          for (var j = 0; j < keyboards.length; j++) {
-            if (String(keyboards[j].name || "") !== root.virtualKeyboardName) continue
-            var rules = String(keyboards[j].rules || "") + " " + String(keyboards[j].active_keymap || "")
-            // Hyprland honours per-device xkb options for some virtual
-            // keyboards and silently keeps the client-supplied keymap for
-            // others, so success is only claimed when it is observable.
-            root.macKeyboardState = rules.indexOf("swap_lwin_lctl") >= 0 ? "applied" : "unsupported"
-            return
-          }
-          root.macKeyboardState = "unsupported"
+        for (var i = 0; i < keyboards.length; i++) {
+          if (String(keyboards[i].name || "") !== root.virtualKeyboardName) continue
+          var rules = String(keyboards[i].rules || "")
+          // Only claim success when the compositor reports the rule on the
+          // live device. Anything else is reported as not applied.
+          root.macKeyboardState = rules.indexOf(root.macKeyOption) >= 0 ? "applied" : "unsupported"
+          return
         }
+        // The virtual keyboard only exists while a peer is sending input, so
+        // its absence means the rule is registered and waiting, not broken.
+        if (root.macKeyboard) root.macKeyboardState = "armed"
       }
     }
   }
@@ -496,12 +467,39 @@ Item {
     running: false
     command: []
     onExited: function(exitCode) {
-      if (keywordProcess.mode !== "apply") return
+      if (keywordProcess.mode !== "apply") {
+        root.macKeyboardState = "off"
+        return
+      }
       if (exitCode !== 0) {
         root.macKeyboardState = "unsupported"
         return
       }
       root.verifyMacKeyboard()
+    }
+  }
+
+  // The virtual keyboard comes and goes with the link, so the applied state is
+  // re-checked rather than latched once.
+  Timer {
+    interval: 6000
+    repeat: true
+    running: root.macKeyboard && root.linked
+    onTriggered: root.verifyMacKeyboard()
+  }
+
+  Process {
+    id: kbOptionsProcess
+    running: false
+    command: []
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        // `hyprctl getoption` prints "str: <value>" followed by "set: <bool>".
+        var match = String(text || "").match(/str:\s*(.*)/)
+        root.globalKbOptions = match ? String(match[1]).trim() : ""
+        root.applyMacKeyboard()
+      }
     }
   }
 
