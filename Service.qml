@@ -40,8 +40,17 @@ Item {
   property string virtualKeyboardName: ""
   property var keyboardsBeforeStart: []
 
+  property int connectAttempts: 0
+  readonly property bool wantLink: installed && socketPath() !== ""
+  property bool bouncing: false
+  property string socketError: ""
   property bool clipdInstalled: false
-  property bool clipdRunning: false
+  property int clipdFailures: 0
+  readonly property bool clipdRunning: clipdProcess.running
+  // Three quick failures in a row means something is wrong that retrying will
+  // not fix, usually the port already being held. Surface it instead of
+  // respawning forever.
+  readonly property bool clipdGaveUp: clipdFailures >= 3
 
   readonly property bool daemonRunning: daemonProcess.running || linked
   readonly property string summary: Model.summarize(peers, captureEnabled, emulationEnabled)
@@ -70,9 +79,10 @@ Item {
   }
 
   function request(name, value) {
-    if (!ipc.connected) return false
-    ipc.write(Model.encodeRequest(name, value) + "\n")
-    ipc.flush()
+    var socket = ipcLoader.item
+    if (!socket) return false
+    socket.write(Model.encodeRequest(name, value) + "\n")
+    socket.flush()
     return true
   }
 
@@ -83,20 +93,18 @@ Item {
     // Snapshot the keyboards Hyprland already knows so the virtual one the
     // daemon is about to create can be identified by difference.
     captureKeyboardsThen(function() {
-      daemonProcess.command = ["lan-mouse", "daemon", "--emulation-backend", root.emulationBackend]
+      // Backend selection is a top-level flag, so it has to precede the
+      // subcommand or lan-mouse exits with a usage error.
+      daemonProcess.command = ["lan-mouse", "--emulation-backend", root.emulationBackend, "daemon"]
       daemonProcess.running = true
-      reconnectTimer.start()
     })
   }
 
   function stop() {
     actionStatus = "Stopping"
     daemonProcess.running = false
-    ipc.connected = false
-    linked = false
-    peers = []
-    captureEnabled = false
-    emulationEnabled = false
+    dropLink()
+    watchdogTimer.stop()
     macKeyboardState = "off"
     virtualKeyboardName = ""
     stopClipd()
@@ -150,6 +158,25 @@ Item {
     request("Enumerate", [])
     request("Sync")
     refreshMonitors()
+  }
+
+  function noteTraffic() {
+    if (!linked) {
+      linked = true
+      actionStatus = ""
+      // Ask for a full picture the moment the link comes up; the daemon only
+      // volunteers state it happens to be changing.
+      Qt.callLater(function() { root.refresh() })
+    }
+    bouncing = false
+    watchdogTimer.restart()
+  }
+
+  function dropLink() {
+    linked = false
+    peers = []
+    captureEnabled = false
+    emulationEnabled = false
   }
 
   function handleEvent(line) {
@@ -241,6 +268,7 @@ Item {
     devicesProcess.running = true
   }
   property var _afterDevices: null
+  property string _clipdStderr: ""
 
   function identifyVirtualKeyboard() {
     devicesProcess.mode = "identify"
@@ -286,15 +314,19 @@ Item {
   }
 
   function startClipd() {
-    if (!clipboardSync || !clipdInstalled || clipdProcess.running) return
-    clipdProcess.command = [clipdBinary(), "--peer-config", Quickshell.env("HOME") + "/.config/lan-mouse/config.toml"]
+    if (!clipboardSync || !clipdInstalled || clipdProcess.running || clipdGaveUp) return
+    clipdProcess.command = [clipdBinary(), "run", "--peer-config",
+                            Quickshell.env("HOME") + "/.config/lan-mouse/config.toml"]
     clipdProcess.running = true
-    clipdRunning = true
   }
 
   function stopClipd() {
     clipdProcess.running = false
-    clipdRunning = false
+  }
+
+  function retryClipd() {
+    clipdFailures = 0
+    startClipd()
   }
 
   function clipdBinary() {
@@ -302,7 +334,7 @@ Item {
   }
 
   onMacKeyboardChanged: applyMacKeyboard()
-  onClipboardSyncChanged: clipboardSync ? startClipd() : stopClipd()
+  onClipboardSyncChanged: clipboardSync ? retryClipd() : stopClipd()
 
   Component.onCompleted: {
     whichProcess.command = ["which", "lan-mouse"]
@@ -312,43 +344,60 @@ Item {
     refreshMonitors()
   }
 
-  Socket {
-    id: ipc
-    path: root.socketPath()
-    connected: false
+  // Quickshell 0.3 never emits connectionStateChanged, not even on a
+  // successful connect, and a Socket whose `connected` is flipped after
+  // creation does not reliably attempt the connection. A socket that connects
+  // on creation does work, so each attempt gets a brand new Socket and link
+  // state is derived from traffic rather than from the socket's property.
+  Loader {
+    id: ipcLoader
+    active: root.wantLink && !root.bouncing
 
-    onConnectionStateChanged: {
-      root.linked = connected
-      if (connected) {
-        root.actionStatus = ""
-        reconnectTimer.stop()
-        root.refresh()
-      } else {
-        root.peers = []
-        root.captureEnabled = false
-        root.emulationEnabled = false
-        if (root.installed) reconnectTimer.start()
+    sourceComponent: Component {
+      Socket {
+        path: root.socketPath()
+        connected: true
+
+        onError: function(error) { root.socketError = "socket error " + error }
+
+        parser: SplitParser {
+          onRead: function(line) {
+            root.noteTraffic()
+            root.handleEvent(line)
+          }
+        }
       }
-    }
-
-    parser: SplitParser {
-      onRead: function(line) { root.handleEvent(line) }
     }
   }
 
-  // The daemon may take a moment to bind its socket, and it may be restarted
-  // out from under us by the user, so reconnection is unconditional rather
-  // than tied to our own start().
+  // Destroying and recreating the socket is what retries the connection. The
+  // daemon usually needs a moment to bind after being started.
   Timer {
-    id: reconnectTimer
-    interval: 1000
+    id: retryTimer
+    interval: 900
     repeat: true
-    running: false
+    running: root.wantLink && !root.linked
     onTriggered: {
-      if (ipc.connected) { stop(); return }
-      if (!root.installed) { stop(); return }
-      ipc.connected = true
+      if (root.bouncing) root.connectAttempts++
+      root.bouncing = !root.bouncing
     }
+  }
+
+  // lan-mouse answers Sync with a full state dump, which doubles as the
+  // heartbeat the watchdog needs to tell a live link from a dead one.
+  Timer {
+    id: heartbeatTimer
+    interval: 8000
+    repeat: true
+    running: root.linked
+    onTriggered: root.request("Sync")
+  }
+
+  Timer {
+    id: watchdogTimer
+    interval: 24000
+    repeat: false
+    onTriggered: root.dropLink()
   }
 
   Timer {
@@ -374,18 +423,16 @@ Item {
     onExited: function(exitCode) {
       root.installed = exitCode === 0
       root.checkedInstall = true
-      if (root.installed) {
-        // Attach to an already-running daemon before deciding to start one.
-        ipc.connected = true
-        if (root.autostart) autostartTimer.start()
-      }
+      // The reconnect timer attaches to an already-running daemon on its own;
+      // autostart only has to cover the case where nothing is running yet.
+      if (root.installed && root.autostart) autostartTimer.start()
     }
   }
 
   Timer {
     id: autostartTimer
     interval: 1200
-    onTriggered: if (!ipc.connected && !daemonProcess.running) root.start()
+    onTriggered: if (!root.linked && !daemonProcess.running) root.start()
   }
 
   Process {
@@ -488,9 +535,31 @@ Item {
     id: clipdProcess
     running: false
     command: []
-    onExited: function(exitCode) {
-      root.clipdRunning = false
-      if (exitCode !== 0 && exitCode !== 143) root.lastError = "clipboard sync exited with code " + exitCode
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var message = String(text || "").trim()
+        if (message !== "") root._clipdStderr = message.split("\n").pop()
+      }
     }
+    onExited: function(exitCode) {
+      if (exitCode === 0 || exitCode === 143) return
+      root.clipdFailures++
+      if (root.clipdGaveUp) {
+        root.lastError = root._clipdStderr !== ""
+          ? "clipboard sync: " + root._clipdStderr
+          : "clipboard sync keeps exiting (code " + exitCode + ")"
+      }
+    }
+  }
+
+  // Keeps the clipboard helper alive alongside the daemon. It is a separate
+  // process precisely so a clipboard problem cannot take input sharing down.
+  Timer {
+    id: clipdSupervisor
+    interval: 4000
+    repeat: true
+    running: root.clipboardSync && root.clipdInstalled && root.daemonRunning && !root.clipdGaveUp
+    onTriggered: root.startClipd()
   }
 }

@@ -173,6 +173,27 @@ Panel {
     function stop(): string { crossover.stop(); return "ok" }
     function status(): string { return crossover.summary }
     function fingerprint(): string { return crossover.fingerprint }
+    // Support hook: everything needed to tell "not installed" apart from
+    // "installed but the daemon will not stay up" without reading QML logs.
+    function state(): string {
+      return JSON.stringify({
+        installed: crossover.installed,
+        checked: crossover.checkedInstall,
+        linked: crossover.linked,
+        daemonRunning: crossover.daemonRunning,
+        emulation: crossover.emulationEnabled,
+        capture: crossover.captureEnabled,
+        macKeyboard: crossover.macKeyboardState,
+        virtualKeyboard: crossover.virtualKeyboardName,
+        clipdInstalled: crossover.clipdInstalled,
+        clipdRunning: crossover.clipdRunning,
+        peers: crossover.peers.length,
+        socketPath: crossover.socketPath(),
+        attempts: crossover.connectAttempts,
+        socketError: crossover.socketError,
+        error: crossover.lastError
+      })
+    }
   }
 
   BarIconButton {
@@ -546,8 +567,9 @@ Panel {
               label: "Clipboard"
               value: !crossover.clipboardSync ? "Off"
                      : !crossover.clipdInstalled ? "Helper not installed"
-                     : crossover.clipdRunning ? "Shared" : "Stopped"
-              warn: crossover.clipboardSync && !crossover.clipdInstalled
+                     : crossover.clipdGaveUp ? "Helper keeps exiting"
+                     : crossover.clipdRunning ? "Shared" : "Starting"
+              warn: crossover.clipboardSync && (!crossover.clipdInstalled || crossover.clipdGaveUp)
             }
 
             StatusLine {
