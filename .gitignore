@@ -1,0 +1,3 @@
+clipd/target/
+*.qmlc
+*.jsc

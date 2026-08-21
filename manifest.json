@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "nwilkens.crossover",
+  "name": "Crossover",
+  "version": "0.1.0",
+  "author": "Nick Wilkens",
+  "license": "MIT",
+  "description": "Drive this machine from another computer's mouse and keyboard. Peer pairing, edge assignment, Mac keyboard translation, and a shared clipboard, built on lan-mouse.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Crossover",
+    "description": "Share one mouse and keyboard across machines, with clipboard sync and Mac key translation.",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "macKeyboard": true,
+      "clipboardSync": true,
+      "seamIndicator": true,
+      "autostart": true,
+      "emulationBackend": "wlroots"
+    },
+    "schema": [
+      {
+        "key": "macKeyboard",
+        "type": "boolean",
+        "label": "Translate Mac modifiers (Cmd acts as Ctrl)",
+        "defaultValue": true
+      },
+      {
+        "key": "clipboardSync",
+        "type": "boolean",
+        "label": "Share clipboard with paired peers",
+        "defaultValue": true
+      },
+      {
+        "key": "seamIndicator",
+        "type": "boolean",
+        "label": "Glow the screen edge on crossing",
+        "defaultValue": true
+      },
+      {
+        "key": "autostart",
+        "type": "boolean",
+        "label": "Start the daemon with the shell",
+        "defaultValue": true
+      },
+      {
+        "key": "emulationBackend",
+        "type": "string",
+        "label": "Emulation backend",
+        "defaultValue": "wlroots"
+      }
+    ]
+  }
+}
