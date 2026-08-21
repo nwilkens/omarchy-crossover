@@ -19,7 +19,7 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "macKeyboard": true,
+      "macKeyboard": false,
       "clipboardSync": true,
       "seamIndicator": true,
       "autostart": true,
@@ -30,7 +30,7 @@
         "key": "macKeyboard",
         "type": "boolean",
         "label": "Translate Mac modifiers (Cmd acts as Ctrl)",
-        "defaultValue": true
+        "defaultValue": false
       },
       {
         "key": "clipboardSync",

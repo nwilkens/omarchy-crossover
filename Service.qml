@@ -11,7 +11,9 @@ Item {
 
   property var settings: ({})
 
-  readonly property bool macKeyboard: setting("macKeyboard", true)
+  // Off by default: swapping Ctrl and Super is right for a Mac peer and wrong
+  // for a Linux one, and the plugin cannot tell which is driving it.
+  readonly property bool macKeyboard: setting("macKeyboard", false)
   readonly property bool clipboardSync: setting("clipboardSync", true)
   readonly property bool autostart: setting("autostart", true)
   readonly property string emulationBackend: String(setting("emulationBackend", "wlroots"))
@@ -319,9 +321,11 @@ Item {
     startClipd()
   }
 
-  function clipdBinary() {
-    return Quickshell.env("HOME") + "/.cargo/bin/crossover-clipd"
-  }
+  // Discovered rather than hardcoded: a release download lands in ~/.local/bin
+  // and `cargo install` lands in ~/.cargo/bin, and either is legitimate.
+  property string clipdPath: ""
+
+  function clipdBinary() { return clipdPath }
 
   onMacKeyboardChanged: applyMacKeyboard()
   onClipboardSyncChanged: clipboardSync ? retryClipd() : stopClipd()
@@ -331,7 +335,10 @@ Item {
     kbOptionsProcess.running = true
     whichProcess.command = ["which", "lan-mouse"]
     whichProcess.running = true
-    clipdWhichProcess.command = ["test", "-x", clipdBinary()]
+    clipdWhichProcess.command = ["sh", "-c",
+      "command -v crossover-clipd 2>/dev/null || " +
+      "{ [ -x \"$HOME/.local/bin/crossover-clipd\" ] && echo \"$HOME/.local/bin/crossover-clipd\"; } || " +
+      "{ [ -x \"$HOME/.cargo/bin/crossover-clipd\" ] && echo \"$HOME/.cargo/bin/crossover-clipd\"; }"]
     clipdWhichProcess.running = true
     refreshMonitors()
   }
@@ -524,9 +531,13 @@ Item {
     id: clipdWhichProcess
     running: false
     command: []
-    onExited: function(exitCode) {
-      root.clipdInstalled = exitCode === 0
-      if (root.clipdInstalled && root.clipboardSync) root.startClipd()
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.clipdPath = String(text || "").trim().split("\n")[0]
+        root.clipdInstalled = root.clipdPath !== ""
+        if (root.clipdInstalled && root.clipboardSync) root.startClipd()
+      }
     }
   }
 

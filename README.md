@@ -40,7 +40,7 @@ omarchy plugin enable nwilkens.crossover --section right
 
 If `lan-mouse` is missing the panel says so and hands you the command.
 
-### The clipboard helper
+### The clipboard helper (Omarchy side)
 
 The plugin cannot install binaries: `omarchy plugin add` deliberately never
 runs an install hook. Grab a release build, or compile it yourself:
@@ -91,13 +91,19 @@ setup script installs a LaunchAgent.
 
 ## Setting up the Mac side
 
+One command, no Rust toolchain, no compiling:
+
 ```bash
-./scripts/macos-setup.sh <omarchy-host-or-ip>
+./scripts/install-macos.sh 10.0.5.1 --ssh you@10.0.5.1
 ```
 
-It installs lan-mouse with `--no-default-features`, because the default set
-pulls in the GTK frontend and that does not build on macOS. You get the daemon
-and its CLI, which is all this needs.
+It downloads the official `Lan Mouse.app`, clears the Gatekeeper quarantine
+flag that otherwise makes an ad-hoc signed app look corrupt, installs the
+clipboard helper and its LaunchAgent, points Lan Mouse at your Omarchy machine,
+and pairs the clipboard in both directions over ssh.
+
+Drop `--ssh` and it prints the fingerprints for you to exchange by hand.
+Use `--position right` if the Omarchy machine sits to the right of your Mac.
 
 That installs lan-mouse and the clipboard agent and walks you through pairing.
 Two things it cannot do for you:
@@ -120,24 +126,36 @@ Two things it cannot do for you:
 
 ## Mac keyboard translation
 
+Off by default, because swapping Ctrl and Super is right when a Mac is driving
+and wrong when another Linux box is. Turn it on from Setup > Plugins once your
+peer is a Mac.
+
 A Mac sends Command as Super. Omarchy binds Super to its own shortcuts, so
 without translation Cmd-C opens a workspace instead of copying.
 
 Crossover applies `ctrl:swap_lwin_lctl` to the virtual keyboard that lan-mouse
-creates, and to nothing else:
+creates, and to nothing else. Hyprland 0.56 refuses `hyprctl keyword` under its
+Lua parser, so the rule is registered through the Lua device API instead, which
+also means it applies the moment the device appears:
 
 ```
-hyprctl keyword 'device[hl-virtual-keyboard-lan-mouse]:kb_options' ctrl:swap_lwin_lctl
+hyprctl eval 'hl.device({ name = "hl-virtual-keyboard-lan-mouse",
+                          kb_options = "<your options>,ctrl:swap_lwin_lctl" })'
 ```
+
+Your existing `input:kb_options` are read first and preserved, so a compose key
+stays a compose key. Nothing is written to your Hyprland config; the rule is
+applied at runtime and disappears when you turn the setting off.
 
 Cmd becomes Ctrl, and the Mac's Control key becomes Super, which is where you
 reach for Omarchy's own bindings. The keyboard attached to the Omarchy machine
 keeps its normal layout.
 
-Hyprland honours per-device options for some virtual keyboards and keeps the
-client-supplied keymap for others. Crossover applies the option, reads the
-device back, and reports **"Compositor kept its own keymap"** if it did not
-take, rather than claiming a translation that is not happening.
+Crossover applies the rule, reads the device back from `hyprctl devices`, and
+reports what it actually finds: **"Ready, waiting for input"** before the
+virtual keyboard exists, **"Cmd acts as Ctrl"** once the compositor confirms
+the rule on the live device, and **"Compositor refused the rule"** if it did
+not take. It never claims a translation that is not happening.
 
 ## Settings
 
@@ -146,7 +164,7 @@ Set these from Setup > Plugins, or inline on the widget's entry in
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `macKeyboard` | `true` | Translate Cmd to Ctrl on the incoming keyboard |
+| `macKeyboard` | `false` | Translate Cmd to Ctrl on the incoming keyboard |
 | `clipboardSync` | `true` | Run the clipboard helper alongside the daemon |
 | `seamIndicator` | `true` | Glow the screen edge on a crossing |
 | `autostart` | `true` | Start lan-mouse with the shell |
