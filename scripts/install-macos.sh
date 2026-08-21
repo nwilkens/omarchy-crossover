@@ -8,6 +8,7 @@
 #   ...add --ssh you@10.0.5.1 to pair both machines automatically.
 set -euo pipefail
 
+SELF_URL="https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh"
 LAN_MOUSE_VERSION="v0.11.0"
 CLIPD_REPO="nwilkens/omarchy-crossover"
 APP="/Applications/Lan Mouse.app"
@@ -29,8 +30,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z $PEER_HOST ]]; then
+  # Not $0: piped through bash that reads "usage: bash", which helps nobody.
   cat >&2 <<USAGE
-usage: $0 <omarchy-host-or-ip> [--ssh user@host] [--position left|right|top|bottom]
+usage: install-macos.sh <omarchy-host-or-ip> [--ssh user@host] [--position left|right|top|bottom]
+   or: curl -fsSL $SELF_URL | bash -s -- <omarchy-host-or-ip> [--ssh user@host]
 
   <omarchy-host-or-ip>  where the Omarchy machine is on your network
   --ssh                 pair both machines automatically over ssh

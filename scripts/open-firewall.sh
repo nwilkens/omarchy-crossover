@@ -4,12 +4,15 @@
 # peer that is simply not answering, so this is worth doing up front.
 set -euo pipefail
 
+SELF_URL="https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/open-firewall.sh"
+
 SUBNET="${1:-}"
 if [[ -z $SUBNET ]]; then
   cat >&2 <<USAGE
-usage: $0 <subnet>
+usage: open-firewall.sh <subnet>
+   or: curl -fsSL $SELF_URL | bash -s -- <subnet>
 
-  $0 192.168.1.0/24
+  open-firewall.sh 192.168.1.0/24
 
 Find yours with: ip -4 -o addr show | awk '{print \$2, \$4}'
 USAGE
