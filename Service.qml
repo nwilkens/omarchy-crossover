@@ -35,6 +35,9 @@ Item {
   property string lastError: ""
   property string actionStatus: ""
   property var monitors: []
+  // Shown in the panel so the setup command can carry a real address instead
+  // of a placeholder the user has to go look up.
+  property string localAddress: ""
 
   // Set by DeviceEntered and cleared on a timer. The indicator watches this
   // rather than the peer list because entering is an event, not a state.
@@ -402,6 +405,9 @@ Item {
   onLinkedChanged: if (linked && lastError.indexOf("lan-mouse") === 0) lastError = ""
 
   Component.onCompleted: {
+    addressProcess.command = ["sh", "-c",
+      "ip -4 -o route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \\([0-9.]*\\).*/\\1/p' | head -1"]
+    addressProcess.running = true
     kbOptionsProcess.command = ["hyprctl", "getoption", "input:kb_options"]
     kbOptionsProcess.running = true
     whichProcess.command = ["which", "lan-mouse"]
@@ -587,6 +593,16 @@ Item {
     repeat: true
     running: root.macKeyboard && root.linked
     onTriggered: root.verifyMacKeyboard()
+  }
+
+  Process {
+    id: addressProcess
+    running: false
+    command: []
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.localAddress = String(text || "").trim()
+    }
   }
 
   Process {

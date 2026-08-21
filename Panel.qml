@@ -42,6 +42,9 @@ Panel {
     return out
   }
   readonly property string installCommand: "sudo pacman -S lan-mouse"
+  readonly property string setupHost: crossover.localAddress !== "" ? crossover.localAddress : "<this-machine-ip>"
+  readonly property string macSetupCommand:
+    "curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh | bash -s -- " + setupHost
   readonly property string clipdInstallCommand: "cargo install --path " + crossover.pluginDir() + "/clipd"
 
   function ensureCursor() {
@@ -57,6 +60,7 @@ Panel {
     if (crossover.pendingFingerprint !== "") order.push("approve")
     if (crossover.peers.length > 0) order.push("peers")
     order.push("add")
+    order.push("setup")
     order.push("identity")
     return order
   }
@@ -100,6 +104,7 @@ Panel {
         if (peer) crossover.activate(peer.handle, !peer.active)
         break
       case "add": root.beginAddPeer(); break
+      case "setup": copyText(root.macSetupCommand); break
       case "identity": copyText(crossover.fingerprint); break
     }
   }
@@ -223,8 +228,10 @@ Panel {
         clipdInstalled: crossover.clipdInstalled,
         clipdRunning: crossover.clipdRunning,
         peers: crossover.peers.length,
-        incoming: crossover.incoming.length,
         daemonFailures: crossover.daemonFailures,
+        opened: root.opened,
+        driving: crossover.incoming.length,
+        unconfigured: root.strangers.length,
         wantDaemon: crossover.wantDaemon,
         autostart: crossover.autostart,
         socketPath: crossover.socketPath(),
@@ -734,6 +741,66 @@ Panel {
               width: parent.width
               label: "Emulation"
               value: crossover.emulationEnabled ? "Ready" : "Inactive"
+            }
+          }
+
+          // The whole point of failure for a two-machine tool is the second
+          // machine: someone installs the plugin and has no idea what to run
+          // over there. This hands them the exact line, with this machine's
+          // address already in it.
+          CursorSurface {
+            id: setupRow
+            visible: crossover.installed
+            width: parent.width
+            implicitHeight: setupColumn.implicitHeight + Style.space(16)
+            foreground: root.foreground
+            hasCursor: root.cursorActive && root.focusSection === "setup"
+            bordered: crossover.peers.length === 0
+
+            MouseArea {
+              anchors.fill: parent
+              hoverEnabled: true
+              onEntered: { root.cursorActive = true; root.focusSection = "setup" }
+              onClicked: root.copyText(root.macSetupCommand)
+            }
+
+            Column {
+              id: setupColumn
+              width: parent.width - Style.space(20)
+              anchors.centerIn: parent
+              spacing: Style.space(3)
+
+              Text {
+                width: parent.width
+                text: "Set up another machine"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+              Text {
+                width: parent.width
+                text: "Run this on the Mac you want to drive from:"
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+              Text {
+                width: parent.width
+                text: root.macSetupCommand
+                color: root.dim
+                font.family: Style.font.mono ? Style.font.mono : root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WrapAnywhere
+              }
+              Text {
+                width: parent.width
+                text: "Click to copy"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                opacity: 0.8
+              }
             }
           }
 

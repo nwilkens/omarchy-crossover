@@ -2,8 +2,10 @@
 # Sets up the Mac half of Crossover end to end: Lan Mouse for input, the
 # clipboard helper, and the pairing between them. Needs no Rust toolchain.
 #
-#   ./install-macos.sh 10.0.5.1
-#   ./install-macos.sh 10.0.5.1 --ssh nwilkens@10.0.5.1   # pairs automatically
+# Safe to run piped:
+#   curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh \
+#     | bash -s -- 10.0.5.1
+#   ...add --ssh you@10.0.5.1 to pair both machines automatically.
 set -euo pipefail
 
 LAN_MOUSE_VERSION="v0.11.0"
@@ -85,8 +87,13 @@ else
     chmod +x "$CLIPD"
     xattr -dr com.apple.quarantine "$CLIPD" 2>/dev/null || true
   elif command -v cargo >/dev/null; then
+    # Piped through bash there is no script directory to build from, so the
+    # source is fetched rather than assumed to be next to us.
     echo "No release build available, compiling from source."
-    cargo install --path "$(cd "$(dirname "$0")/../clipd" && pwd)" --root "$HOME/.local"
+    SRC=$(mktemp -d)
+    git clone --depth 1 "https://github.com/$CLIPD_REPO.git" "$SRC/repo"
+    cargo install --path "$SRC/repo/clipd" --root "$HOME/.local"
+    rm -rf "$SRC"
   else
     echo "Could not download $URL and cargo is not installed." >&2
     exit 1

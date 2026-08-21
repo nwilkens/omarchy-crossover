@@ -29,6 +29,30 @@ It is Universal Control, for a Linux box you actually own.
 - **A seam.** The screen edge glows briefly when the cursor crosses in, so a
   pointer arriving from nowhere does not feel like a glitch.
 
+## Quick start
+
+Three commands, one on each machine plus a firewall rule.
+
+```bash
+# 1. On Omarchy: install the plugin and lan-mouse
+omarchy plugin add https://github.com/nwilkens/omarchy-crossover.git
+omarchy plugin enable nwilkens.crossover --section right
+sudo pacman -S lan-mouse
+
+# 2. On Omarchy: open the ports on your LAN (ufw blocks them by default)
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/open-firewall.sh \
+  | bash -s -- 192.168.1.0/24
+
+# 3. On the Mac: everything, in one line
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh \
+  | bash -s -- <omarchy-ip> --ssh you@<omarchy-ip>
+```
+
+Open the Crossover panel on the bar and it shows you step 3 with your own
+address already filled in, so you never have to go find it. Approve the
+fingerprint on both ends, grant Lan Mouse the macOS permissions it asks for,
+and push your cursor off the edge.
+
 ## Requirements
 
 - Omarchy 4 (Quattro) with `omarchy-shell`
@@ -95,11 +119,20 @@ setup script installs a LaunchAgent.
 
 ## Setting up the Mac side
 
-One command, no Rust toolchain, no compiling:
+One command on the Mac. No repo to clone, no Rust toolchain, no compiling:
 
 ```bash
-./scripts/install-macos.sh 10.0.5.1 --ssh you@10.0.5.1
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh \
+  | bash -s -- 10.0.5.1 --ssh you@10.0.5.1
 ```
+
+Replace `10.0.5.1` with your Omarchy machine's address. The Crossover panel
+shows you this exact line, with the address already filled in, under
+**Set up another machine**.
+
+The `--ssh` part is optional and only used to pair the clipboard in both
+directions without copy-pasting fingerprints between machines. Drop it and the
+script prints the fingerprints for you to exchange by hand.
 
 It downloads the official `Lan Mouse.app`, clears the Gatekeeper quarantine
 flag that otherwise makes an ad-hoc signed app look corrupt, installs the
