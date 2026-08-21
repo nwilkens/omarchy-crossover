@@ -46,8 +46,8 @@ impl Config {
             config.save(dir)?;
             return Ok(config);
         }
-        let text = fs::read_to_string(&path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let text =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
         Ok(toml::from_str(&text)?)
     }
 
@@ -173,7 +173,10 @@ mod tests {
 
     #[test]
     fn splits_host_and_port() {
-        assert_eq!(split_host_port("10.0.0.4:9000", 4243), ("10.0.0.4".into(), 9000));
+        assert_eq!(
+            split_host_port("10.0.0.4:9000", 4243),
+            ("10.0.0.4".into(), 9000)
+        );
     }
 
     #[test]
@@ -183,7 +186,10 @@ mod tests {
 
     #[test]
     fn splits_bracketed_ipv6() {
-        assert_eq!(split_host_port("[fe80::1]:9000", 4243), ("fe80::1".into(), 9000));
+        assert_eq!(
+            split_host_port("[fe80::1]:9000", 4243),
+            ("fe80::1".into(), 9000)
+        );
         assert_eq!(split_host_port("[fe80::1]", 4243), ("fe80::1".into(), 4243));
     }
 

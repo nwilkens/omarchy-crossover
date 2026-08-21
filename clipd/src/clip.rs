@@ -27,7 +27,10 @@ mod backend {
         get_contents, get_mime_types, ClipboardType, Error as PasteError, MimeType, Seat,
     };
 
-    const CONCEALED_HINTS: [&str; 2] = ["x-kde-passwordManagerHint", "org.nspasteboard.ConcealedType"];
+    const CONCEALED_HINTS: [&str; 2] = [
+        "x-kde-passwordManagerHint",
+        "org.nspasteboard.ConcealedType",
+    ];
 
     pub fn read_text() -> Result<Option<String>> {
         match get_contents(ClipboardType::Regular, Seat::Unspecified, MimeType::Text) {

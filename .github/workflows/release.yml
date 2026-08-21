@@ -1,0 +1,51 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+# The plugin installer never runs build steps, and Omarchy does not ship a Rust
+# toolchain, so the clipboard helper has to arrive as a binary.
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: crossover-clipd-x86_64-linux
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: crossover-clipd-aarch64-macos
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: crossover-clipd-x86_64-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo build --release --target ${{ matrix.target }}
+        working-directory: clipd
+      - run: cp clipd/target/${{ matrix.target }}/release/crossover-clipd ${{ matrix.name }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: crossover-clipd-*
+          generate_release_notes: true

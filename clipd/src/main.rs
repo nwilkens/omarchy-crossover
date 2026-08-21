@@ -23,7 +23,11 @@ const EXCHANGE_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_INFLIGHT: usize = 8;
 
 #[derive(Parser, Debug)]
-#[command(name = "crossover-clipd", version, about = "Encrypted clipboard sync for Omarchy Crossover")]
+#[command(
+    name = "crossover-clipd",
+    version,
+    about = "Encrypted clipboard sync for Omarchy Crossover"
+)]
 struct Cli {
     /// A lan-mouse config to import peer addresses from.
     #[arg(long, global = true)]
@@ -122,7 +126,10 @@ async fn run(
     match cfg.import_lan_mouse_peers(&import_path) {
         Ok(0) => {}
         Ok(count) => {
-            log::info!("imported {count} peer address(es) from {}", import_path.display());
+            log::info!(
+                "imported {count} peer address(es) from {}",
+                import_path.display()
+            );
             cfg.save(&dir)?;
         }
         Err(err) => log::warn!("could not read {}: {err}", import_path.display()),
@@ -279,12 +286,7 @@ async fn watch_loop(
     }
 }
 
-async fn push(
-    host: &str,
-    port: u16,
-    connector: &TlsConnector,
-    payload: &Payload,
-) -> Result<()> {
+async fn push(host: &str, port: u16, connector: &TlsConnector, payload: &Payload) -> Result<()> {
     let stream = timeout(CONNECT_TIMEOUT, TcpStream::connect((host, port))).await??;
     stream.set_nodelay(true)?;
 

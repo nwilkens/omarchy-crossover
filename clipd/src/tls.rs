@@ -29,8 +29,7 @@ impl Identity {
             return Ok(Self { cert, key });
         }
 
-        fs::create_dir_all(dir)
-            .with_context(|| format!("creating {}", dir.display()))?;
+        fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
 
         let key_pair = rcgen::KeyPair::generate()?;
         let params = rcgen::CertificateParams::new(vec!["crossover".to_string()])?;

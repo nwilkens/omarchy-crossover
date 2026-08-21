@@ -164,6 +164,7 @@ Item {
     if (!linked) {
       linked = true
       actionStatus = ""
+      socketError = ""
       // Ask for a full picture the moment the link comes up; the daemon only
       // volunteers state it happens to be changing.
       Qt.callLater(function() { root.refresh() })

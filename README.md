@@ -54,6 +54,20 @@ curl -sSL https://github.com/nwilkens/omarchy-crossover/releases/latest/download
 cargo install --path ~/.config/omarchy/plugins/nwilkens.crossover/clipd
 ```
 
+## Open the ports first
+
+Omarchy ships with `ufw` enabled, and it blocks both ports by default. A
+blocked port is indistinguishable from a peer that is not answering, so do this
+before you start debugging pairing:
+
+```bash
+./scripts/open-firewall.sh 192.168.1.0/24   # your LAN, not 0.0.0.0/0
+```
+
+That opens 4242 (lan-mouse, UDP and TCP) and 4243 (clipboard, TCP) to that
+subnet only. Do the same on the other machine if it firewalls inbound traffic;
+macOS will prompt the first time instead.
+
 ## Pairing
 
 Two independent pairings, one for input and one for the clipboard. Both are
@@ -80,6 +94,10 @@ setup script installs a LaunchAgent.
 ```bash
 ./scripts/macos-setup.sh <omarchy-host-or-ip>
 ```
+
+It installs lan-mouse with `--no-default-features`, because the default set
+pulls in the GTK frontend and that does not build on macOS. You get the daemon
+and its CLI, which is all this needs.
 
 That installs lan-mouse and the clipboard agent and walks you through pairing.
 Two things it cannot do for you:

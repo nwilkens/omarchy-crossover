@@ -17,7 +17,8 @@ command -v cargo >/dev/null || { echo "cargo is required: https://rustup.rs" >&2
 
 if ! command -v lan-mouse >/dev/null; then
   echo "==> installing lan-mouse"
-  cargo install lan-mouse
+  # default features pull in the GTK frontend, which does not build on macOS
+  cargo install lan-mouse --no-default-features
 fi
 
 if [[ ! -x $CLIPD ]]; then

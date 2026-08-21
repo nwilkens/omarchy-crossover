@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  clipd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --check
+        working-directory: clipd
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: clipd
+      - run: cargo test
+        working-directory: clipd
+
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The shell's own validator is not available here, so check the parts of
+      # it that are pure data: schema version, required fields, and that every
+      # declared entry point actually exists.
+      - name: Validate manifest
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          m = json.load(open("manifest.json"))
+          required = ["schemaVersion", "id", "name", "version", "author", "description", "kinds", "entryPoints"]
+          missing = [k for k in required if k not in m]
+          assert not missing, f"missing manifest fields: {missing}"
+          assert m["schemaVersion"] == 1, "unexpected schemaVersion"
+          assert not m["id"].startswith("omarchy."), "the omarchy. namespace is reserved"
+          for kind in m["kinds"]:
+              key = {"bar-widget": "barWidget"}.get(kind, kind)
+              entry = m["entryPoints"].get(key)
+              assert entry, f"no entry point for kind {kind}"
+              assert not os.path.isabs(entry) and ".." not in entry, f"unsafe entry point {entry}"
+              assert os.path.exists(entry), f"missing entry point file {entry}"
+              assert not os.path.islink(entry), f"entry point is a symlink: {entry}"
+          for root, dirs, files in os.walk("."):
+              if ".git" in root:
+                  continue
+              for name in dirs + files:
+                  p = os.path.join(root, name)
+                  assert not os.path.islink(p), f"symlinks are rejected by the shell: {p}"
+          print("manifest ok")
+          PY

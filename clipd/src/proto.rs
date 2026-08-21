@@ -64,7 +64,9 @@ where
         bail!("header too large to send");
     }
 
-    stream.write_all(&(encoded.len() as u32).to_be_bytes()).await?;
+    stream
+        .write_all(&(encoded.len() as u32).to_be_bytes())
+        .await?;
     stream.write_all(&encoded).await?;
     stream.write_all(&payload.bytes).await?;
     stream.flush().await?;
@@ -90,7 +92,11 @@ where
         bail!("unsupported protocol version {}", header.v);
     }
     if header.len > max_bytes {
-        bail!("refused payload of {} bytes (limit {})", header.len, max_bytes);
+        bail!(
+            "refused payload of {} bytes (limit {})",
+            header.len,
+            max_bytes
+        );
     }
 
     // Allocation follows the cap check, never the peer's claim on its own.
@@ -175,7 +181,9 @@ mod tests {
             sha256: hex(&Sha256::digest(b"good")),
         };
         let encoded = serde_json::to_vec(&header).unwrap();
-        a.write_all(&(encoded.len() as u32).to_be_bytes()).await.unwrap();
+        a.write_all(&(encoded.len() as u32).to_be_bytes())
+            .await
+            .unwrap();
         a.write_all(&encoded).await.unwrap();
         a.write_all(b"evil").await.unwrap();
         let err = read_payload(&mut b, 1024).await.unwrap_err();
@@ -192,9 +200,14 @@ mod tests {
             sha256: hex(&Sha256::digest(b"")),
         };
         let encoded = serde_json::to_vec(&header).unwrap();
-        a.write_all(&(encoded.len() as u32).to_be_bytes()).await.unwrap();
+        a.write_all(&(encoded.len() as u32).to_be_bytes())
+            .await
+            .unwrap();
         a.write_all(&encoded).await.unwrap();
         let err = read_payload(&mut b, 1024).await.unwrap_err();
-        assert!(err.to_string().contains("unsupported protocol version"), "{err}");
+        assert!(
+            err.to_string().contains("unsupported protocol version"),
+            "{err}"
+        );
     }
 }
