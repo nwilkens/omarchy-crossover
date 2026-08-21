@@ -45,7 +45,6 @@ Panel {
   readonly property string setupHost: crossover.localAddress !== "" ? crossover.localAddress : "<this-machine-ip>"
   readonly property string macSetupCommand:
     "curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh | bash -s -- " + setupHost
-  readonly property string clipdInstallCommand: "cargo install --path " + crossover.pluginDir() + "/clipd"
 
   function ensureCursor() {
     if (!crossover.installed) { focusSection = "install"; return }
@@ -180,6 +179,10 @@ Panel {
 
   onOpenedChanged: if (opened) {
     cursorActive = false
+    // Reopening starts clean: a half-typed hostname left over from last time
+    // is confusing and hides the row it replaced.
+    addingPeer = false
+    hostField.text = ""
     if (panelFlick) panelFlick.contentY = 0
     crossover.refresh()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })

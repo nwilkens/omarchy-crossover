@@ -252,6 +252,44 @@ about it:
 
 Report anything that looks wrong by opening an issue.
 
+## What this plugin actually runs
+
+The marketplace scanner flags four capabilities in this repository. All four
+are real, and here is exactly where each one lives.
+
+**The plugin itself never runs `sudo`, and never installs anything.** The
+`sudo pacman -S lan-mouse` you see in `Panel.qml` is a string rendered in the
+panel and copied to your clipboard when you click it. You run it, or you do
+not.
+
+Processes the QML actually spawns, all as your own user:
+
+| Command | Why |
+| --- | --- |
+| `lan-mouse ... daemon` | the input daemon it manages |
+| `crossover-clipd run` | the clipboard helper, if installed |
+| `hyprctl` | read monitors and devices, apply the keyboard rule |
+| `wl-copy` | the click-to-copy actions in the panel |
+| `which`, `sh -c`, `pgrep` | locate binaries, detect an already-running helper |
+| `pkill -x crossover-clipd` | stop the clipboard helper when you switch it off |
+
+The two shell scripts are **optional, run by you, and never invoked by the
+plugin**:
+
+- `scripts/open-firewall.sh` runs on the Omarchy machine and calls `sudo ufw`
+  or `sudo firewall-cmd` to open ports 4242 and 4243 to one subnet you name. It
+  reads service state with `systemctl is-active` to pick between the two; it
+  does not start, stop, or enable any service.
+- `scripts/install-macos.sh` runs **on macOS only** and never touches the
+  Omarchy machine. It downloads the official `Lan Mouse.app` and the clipboard
+  helper into your home directory, writes `~/.config/lan-mouse/config.toml`
+  (backing up any existing file first), and installs a LaunchAgent.
+
+Nothing is written outside `~/.config/lan-mouse`, `~/.config/crossover`, and
+the plugin's own checkout. No sudoers changes. No bundled binaries in this
+repository; the release binaries are built by GitHub Actions from the `clipd`
+source here.
+
 ## How it works
 
 ```
