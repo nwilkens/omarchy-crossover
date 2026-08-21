@@ -22,6 +22,11 @@ Item {
   property bool checkedInstall: false
   property bool linked: false
   property var peers: []
+  // Machines currently connected *to* this screen. Tracked separately from
+  // peers because the two directions are authorized independently: a Mac can
+  // be driving this box while our own link back to it is still refused.
+  property var incoming: []
+  readonly property bool driven: incoming.length > 0
   property bool captureEnabled: false
   property bool emulationEnabled: false
   property string fingerprint: ""
@@ -53,15 +58,24 @@ Item {
   property bool bouncing: false
   property string socketError: ""
   property bool clipdInstalled: false
+  property bool wantDaemon: false
+  property int daemonFailures: 0
+  readonly property bool daemonGaveUp: daemonFailures >= 3
+  property string _daemonStderr: ""
+  property string _clipdStderr: ""
   property int clipdFailures: 0
-  readonly property bool clipdRunning: clipdProcess.running
+  // A helper left behind by a previous shell holds the port, so a fresh one
+  // would die on bind and eventually give up. Adopting it is both correct and
+  // what the user actually wants: the clipboard is being synced either way.
+  property bool clipdAdopted: false
+  readonly property bool clipdRunning: clipdProcess.running || clipdAdopted
   // Three quick failures in a row means something is wrong that retrying will
   // not fix, usually the port already being held. Surface it instead of
   // respawning forever.
   readonly property bool clipdGaveUp: clipdFailures >= 3
 
   readonly property bool daemonRunning: daemonProcess.running || linked
-  readonly property string summary: Model.summarize(peers, captureEnabled, emulationEnabled)
+  readonly property string summary: Model.summarize(peers, incoming)
   readonly property bool busy: daemonProcess.running && !linked
 
   // Fingerprint to last-seen address, needed because DeviceEntered identifies
@@ -95,7 +109,10 @@ Item {
   }
 
   function start() {
-    if (!installed || daemonProcess.running) return
+    wantDaemon = true
+    // `linked` means some lan-mouse already owns the socket, ours or not.
+    // Spawning a second one just produces "service already running!" on a loop.
+    if (!installed || daemonProcess.running || daemonGaveUp || linked) return
     lastError = ""
     actionStatus = "Starting"
     // Backend selection is a top-level flag, so it has to precede the
@@ -107,6 +124,8 @@ Item {
 
   function stop() {
     actionStatus = "Stopping"
+    wantDaemon = false
+    daemonFailures = 0
     daemonProcess.running = false
     dropLink()
     watchdogTimer.stop()
@@ -120,7 +139,14 @@ Item {
     else start()
   }
 
-  function addPeer() { request("Create") }
+  property string pendingHostname: ""
+
+  // lan-mouse's Create makes an empty client and only reports its handle back
+  // in the Created event, so the name the user typed is applied there.
+  function addPeer(hostname) {
+    pendingHostname = String(hostname || "").trim()
+    request("Create")
+  }
   function deletePeer(handle) { request("Delete", handle) }
   function activate(handle, on) { request("Activate", [handle, on === true]) }
 
@@ -170,6 +196,7 @@ Item {
       linked = true
       actionStatus = ""
       socketError = ""
+      daemonFailures = 0
       // Ask for a full picture the moment the link comes up; the daemon only
       // volunteers state it happens to be changing.
       Qt.callLater(function() { root.refresh() })
@@ -181,6 +208,7 @@ Item {
   function dropLink() {
     linked = false
     peers = []
+    incoming = []
     captureEnabled = false
     emulationEnabled = false
   }
@@ -200,6 +228,21 @@ Item {
         peers = list
         break
       case "Created":
+        var created = Model.decodePeer(event.value)
+        peers = Model.upsertPeer(peers, created)
+        if (created && pendingHostname !== "") {
+          var value = pendingHostname
+          pendingHostname = ""
+          if (Model.looksLikeAddress(value)) {
+            request("UpdateFixIps", [created.handle, [value]])
+          } else {
+            request("UpdateHostname", [created.handle, value])
+            request("ResolveDns", created.handle)
+          }
+          request("Activate", [created.handle, true])
+          request("SaveConfiguration")
+        }
+        break
       case "State":
         peers = Model.upsertPeer(peers, Model.decodePeer(event.value))
         break
@@ -228,6 +271,7 @@ Item {
           var map = Object.assign({}, fingerprintAddrs)
           map[String(connected.fingerprint)] = String(connected.addr)
           fingerprintAddrs = map
+          noteIncoming(String(connected.fingerprint), String(connected.addr))
         }
         break
       case "DeviceEntered":
@@ -237,9 +281,13 @@ Item {
           addrs[String(entered.fingerprint)] = String(entered.addr)
           fingerprintAddrs = addrs
         }
+        if (entered.fingerprint && entered.addr) {
+          noteIncoming(String(entered.fingerprint), String(entered.addr))
+        }
         noteCrossing(entered)
         break
       case "IncomingDisconnected":
+        incoming = Model.removeIncomingByAddr(incoming, String(event.value || ""))
         break
       case "PortChanged":
         var port = event.value || []
@@ -252,6 +300,14 @@ Item {
         // A single unparseable line must not take the link down.
         break
     }
+  }
+
+  function noteIncoming(fingerprint, addr) {
+    incoming = Model.upsertIncoming(incoming, {
+      fingerprint: fingerprint,
+      addr: addr,
+      label: Model.incomingLabel(peers, addr)
+    })
   }
 
   function noteCrossing(entered) {
@@ -314,11 +370,23 @@ Item {
 
   function stopClipd() {
     clipdProcess.running = false
+    if (clipdAdopted) {
+      // Turning sharing off has to stop the helper we adopted too, or the
+      // switch would be a lie.
+      adoptStopProcess.command = ["pkill", "-x", "crossover-clipd"]
+      adoptStopProcess.running = true
+      clipdAdopted = false
+    }
+  }
+
+  function retryDaemon() {
+    daemonFailures = 0
+    start()
   }
 
   function retryClipd() {
     clipdFailures = 0
-    startClipd()
+    clipdProbe.running = true
   }
 
   // Discovered rather than hardcoded: a release download lands in ~/.local/bin
@@ -329,6 +397,9 @@ Item {
 
   onMacKeyboardChanged: applyMacKeyboard()
   onClipboardSyncChanged: clipboardSync ? retryClipd() : stopClipd()
+
+  // A recovered link should not leave a stale failure sitting in the panel.
+  onLinkedChanged: if (linked && lastError.indexOf("lan-mouse") === 0) lastError = ""
 
   Component.onCompleted: {
     kbOptionsProcess.command = ["hyprctl", "getoption", "input:kb_options"]
@@ -438,11 +509,34 @@ Item {
     id: daemonProcess
     running: false
     command: []
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var message = String(text || "").trim()
+        if (message !== "") root._daemonStderr = message.split("\n").pop()
+      }
+    }
     onExited: function(exitCode) {
       root.linked = false
-      if (exitCode !== 0 && exitCode !== 143) root.lastError = "lan-mouse exited with code " + exitCode
       root.actionStatus = ""
+      if (exitCode === 0 || exitCode === 143 || !root.wantDaemon) return
+      root.daemonFailures++
+      if (root.daemonGaveUp) {
+        root.lastError = root._daemonStderr !== ""
+          ? "lan-mouse: " + root._daemonStderr
+          : "lan-mouse keeps exiting (code " + exitCode + ")"
+      }
     }
+  }
+
+  // lan-mouse is a long-lived daemon that can be killed from outside the
+  // plugin, and without this the bar would sit there claiming to be on.
+  Timer {
+    id: daemonSupervisor
+    interval: 4000
+    repeat: true
+    running: root.wantDaemon && root.installed && !root.daemonGaveUp
+    onTriggered: if (!daemonProcess.running && !root.linked) root.start()
   }
 
   Process {
@@ -536,7 +630,10 @@ Item {
       onStreamFinished: {
         root.clipdPath = String(text || "").trim().split("\n")[0]
         root.clipdInstalled = root.clipdPath !== ""
-        if (root.clipdInstalled && root.clipboardSync) root.startClipd()
+        // Probe rather than spawn: a helper from a previous shell may already
+        // be running, and spawning into an occupied port burns the retry
+        // budget before adoption ever gets a chance.
+        if (root.clipdInstalled && root.clipboardSync) clipdProbe.running = true
       }
     }
   }
@@ -570,6 +667,28 @@ Item {
     interval: 4000
     repeat: true
     running: root.clipboardSync && root.clipdInstalled && root.daemonRunning && !root.clipdGaveUp
-    onTriggered: root.startClipd()
+    onTriggered: if (!clipdProcess.running) clipdProbe.running = true
+  }
+
+  Process {
+    id: clipdProbe
+    running: false
+    command: ["pgrep", "-x", "crossover-clipd"]
+    onExited: function(exitCode) {
+      var found = exitCode === 0
+      root.clipdAdopted = found && !clipdProcess.running
+      if (found) {
+        root.clipdFailures = 0
+        if (root.lastError.indexOf("clipboard sync") === 0) root.lastError = ""
+      } else {
+        root.startClipd()
+      }
+    }
+  }
+
+  Process {
+    id: adoptStopProcess
+    running: false
+    command: []
   }
 }

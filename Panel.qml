@@ -15,6 +15,7 @@ Panel {
   property string focusSection: "header"
   property int peerIndex: 0
   property bool cursorActive: false
+  property bool addingPeer: false
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
@@ -28,6 +29,18 @@ Panel {
   }
   readonly property color barIconColor: crossover.daemonRunning ? barForeground : Qt.darker(barForeground, 1.55)
   readonly property bool headerHasCursor: cursorActive && focusSection === "header" && crossover.installed
+  readonly property var strangers: {
+    var out = []
+    for (var i = 0; i < crossover.incoming.length; i++) {
+      var entry = crossover.incoming[i]
+      var known = false
+      for (var j = 0; j < crossover.peers.length; j++) {
+        if (Model.isDrivenBy([entry], crossover.peers[j])) { known = true; break }
+      }
+      if (!known) out.push(entry)
+    }
+    return out
+  }
   readonly property string installCommand: "sudo pacman -S lan-mouse"
   readonly property string clipdInstallCommand: "cargo install --path " + crossover.pluginDir() + "/clipd"
 
@@ -86,9 +99,31 @@ Panel {
         var peer = selectedPeer()
         if (peer) crossover.activate(peer.handle, !peer.active)
         break
-      case "add": crossover.addPeer(); break
+      case "add": root.beginAddPeer(); break
       case "identity": copyText(crossover.fingerprint); break
     }
+  }
+
+  function beginAddPeer() {
+    addingPeer = true
+    cursorActive = true
+    focusSection = "add"
+    Qt.callLater(function() { hostField.forceActiveFocus() })
+  }
+
+  function commitAddPeer() {
+    var value = String(hostField.text || "").trim()
+    if (value === "") { cancelAddPeer(); return }
+    crossover.addPeer(value)
+    hostField.text = ""
+    addingPeer = false
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+
+  function cancelAddPeer() {
+    hostField.text = ""
+    addingPeer = false
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
   function cyclePosition() {
@@ -188,6 +223,10 @@ Panel {
         clipdInstalled: crossover.clipdInstalled,
         clipdRunning: crossover.clipdRunning,
         peers: crossover.peers.length,
+        incoming: crossover.incoming.length,
+        daemonFailures: crossover.daemonFailures,
+        wantDaemon: crossover.wantDaemon,
+        autostart: crossover.autostart,
         socketPath: crossover.socketPath(),
         attempts: crossover.connectAttempts,
         socketError: crossover.socketError,
@@ -230,22 +269,26 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      // While the host field is open the panel's single-key shortcuts would
+      // otherwise swallow every character typed into it.
+      blocked: root.addingPeer
       onMoveRequested: function(dx, dy) {
         if (!root.cursorActive) { root.cursorActive = true; return }
         root.moveCursor(dx, dy)
       }
       onActivateRequested: if (root.cursorActive) root.activateCursor()
-      onCloseRequested: root.close()
+      onCloseRequested: root.addingPeer ? root.cancelAddPeer() : root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onDeleteRequested: {
         var peer = root.selectedPeer()
         if (root.focusSection === "peers" && peer) crossover.deletePeer(peer.handle)
       }
       onTextKey: function(t) {
+        if (root.addingPeer) return
         var key = String(t || "").toLowerCase()
         if (key === "r") crossover.refresh()
         else if (key === "p") root.cyclePosition()
-        else if (key === "n") crossover.addPeer()
+        else if (key === "n") root.beginAddPeer()
         else if (key === "c") root.copyText(crossover.fingerprint)
         else if (key === "s") crossover.toggleDaemon()
       }
@@ -314,14 +357,48 @@ Panel {
             }
           }
 
-          Text {
-            visible: crossover.actionStatus !== "" || crossover.lastError !== ""
+          Column {
             width: parent.width
-            text: crossover.actionStatus !== "" ? crossover.actionStatus : crossover.lastError
-            color: crossover.lastError !== "" && crossover.actionStatus === "" ? root.urgent : root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
-            wrapMode: Text.WordWrap
+            spacing: Style.space(6)
+            visible: crossover.actionStatus !== "" || crossover.lastError !== ""
+
+            Text {
+              width: parent.width
+              text: crossover.actionStatus !== "" ? crossover.actionStatus : crossover.lastError
+              color: crossover.lastError !== "" && crossover.actionStatus === "" ? root.urgent : root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              wrapMode: Text.WordWrap
+            }
+
+            // Giving up stops the retry loop, so without this the only way back
+            // would be restarting the shell.
+            Row {
+              spacing: Style.space(8)
+              visible: crossover.daemonGaveUp || crossover.clipdGaveUp
+
+              PanelActionButton {
+                visible: crossover.daemonGaveUp
+                iconText: "Retry sharing"
+                tooltipText: "Start lan-mouse again"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                fontSize: Style.font.bodySmall
+                bordered: true
+                onClicked: crossover.retryDaemon()
+              }
+
+              PanelActionButton {
+                visible: crossover.clipdGaveUp
+                iconText: "Retry clipboard"
+                tooltipText: "Start the clipboard helper again"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                fontSize: Style.font.bodySmall
+                bordered: true
+                onClicked: crossover.retryClipd()
+              }
+            }
           }
 
           // Missing dependency is a first-class state, not an error banner:
@@ -462,11 +539,13 @@ Panel {
                 required property var modelData
                 required property int index
 
+                readonly property bool driving: Model.isDrivenBy(crossover.incoming, modelData)
+
                 width: peerColumn.width
                 implicitHeight: Style.space(38)
                 foreground: root.foreground
                 hasCursor: root.cursorActive && root.focusSection === "peers" && root.peerIndex === index
-                current: modelData.active && modelData.alive
+                current: (modelData.active && modelData.alive) || driving
 
                 MouseArea {
                   anchors.fill: parent
@@ -491,10 +570,13 @@ Panel {
                     height: width
                     radius: width / 2
                     anchors.verticalCenter: parent.verticalCenter
-                    color: peerRow.modelData.active
-                           ? (peerRow.modelData.alive ? Color.accent : root.urgent)
-                           : root.dim
-                    opacity: peerRow.modelData.active ? 1 : 0.5
+                    // Green for a working link in either direction. A machine
+                    // that is driving this screen is connected, whatever our
+                    // own outgoing link to it is doing.
+                    color: peerRow.driving || (peerRow.modelData.active && peerRow.modelData.alive)
+                           ? Color.accent
+                           : (peerRow.modelData.active ? root.urgent : root.dim)
+                    opacity: peerRow.modelData.active || peerRow.driving ? 1 : 0.5
                   }
 
                   Text {
@@ -509,8 +591,8 @@ Panel {
 
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: peerRow.modelData.position
-                    color: root.dim
+                    text: peerRow.driving ? "driving" : peerRow.modelData.position
+                    color: peerRow.driving ? Color.accent : root.dim
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
                   }
@@ -519,29 +601,104 @@ Panel {
             }
           }
 
-          CursorSurface {
+          // A machine can drive this screen without ever being configured as a
+          // peer here, so incoming connections that match nothing in the list
+          // still get a row rather than being invisible.
+          Column {
+            width: parent.width
+            spacing: Style.space(4)
+            visible: root.strangers.length > 0
+
+            PanelSectionHeader {
+              width: parent.width
+              text: "Driving this screen"
+              foreground: root.dim
+              fontFamily: root.fontFamily
+            }
+
+            Repeater {
+              model: root.strangers
+              delegate: Item {
+                required property var modelData
+                width: parent.width
+                implicitHeight: Style.space(32)
+
+                Rectangle {
+                  id: strangerDot
+                  width: Style.space(7)
+                  height: width
+                  radius: width / 2
+                  anchors.left: parent.left
+                  anchors.leftMargin: Style.space(10)
+                  anchors.verticalCenter: parent.verticalCenter
+                  color: Color.accent
+                }
+
+                Text {
+                  anchors.left: strangerDot.right
+                  anchors.leftMargin: Style.space(8)
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: modelData.label
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                }
+
+                Text {
+                  anchors.right: parent.right
+                  anchors.rightMargin: Style.space(10)
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: "not configured"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+            }
+          }
+
+          Item {
             id: addRow
             visible: crossover.installed
             width: parent.width
-            implicitHeight: Style.space(34)
-            foreground: root.foreground
-            hasCursor: root.cursorActive && root.focusSection === "add"
+            implicitHeight: root.addingPeer ? hostField.implicitHeight : Style.space(34)
 
-            MouseArea {
+            CursorSurface {
               anchors.fill: parent
-              hoverEnabled: true
-              onEntered: { root.cursorActive = true; root.focusSection = "add" }
-              onClicked: crossover.addPeer()
+              visible: !root.addingPeer
+              foreground: root.foreground
+              hasCursor: root.cursorActive && root.focusSection === "add"
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onEntered: { root.cursorActive = true; root.focusSection = "add" }
+                onClicked: root.beginAddPeer()
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(10)
+                text: "Add a machine"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
             }
 
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
+            TextField {
+              id: hostField
               anchors.left: parent.left
-              anchors.leftMargin: Style.space(10)
-              text: "Add a machine"
-              color: root.dim
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              visible: root.addingPeer
+              placeholderText: "Hostname or IP address"
+              foreground: root.foreground
               font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
+              font.pixelSize: Style.font.body
+              onAccepted: root.commitAddPeer()
+              Keys.onEscapePressed: root.cancelAddPeer()
             }
           }
 

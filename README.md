@@ -22,6 +22,10 @@ It is Universal Control, for a Linux box you actually own.
   physically attached to the Omarchy box is untouched.
 - **Pairing that shows you the fingerprint.** An unknown machine asking to
   connect gets a confirmation card, not a silent accept.
+- **Honest about which way the link is up.** The two directions are authorized
+  separately, so a Mac can be driving this screen while your own link back to
+  it is still refused. Machines currently driving you are shown as such, even
+  ones you never configured as peers.
 - **A seam.** The screen edge glows briefly when the cursor crosses in, so a
   pointer arriving from nowhere does not feel like a glitch.
 
@@ -179,11 +183,22 @@ depend on an InputCapture portal that Hyprland has not shipped yet.
 | --- | --- |
 | Enter | Toggle the selected machine, or approve a pairing |
 | `p` | Cycle which edge the selected machine sits on |
-| `n` | Add a machine |
+| `n` | Add a machine, by hostname or IP |
 | `s` | Start or stop sharing |
 | `c` | Copy this machine's fingerprint |
 | `r` | Refresh |
 | Delete | Remove the selected machine |
+
+## When something is wrong
+
+The panel tries to say what is actually happening rather than showing a
+spinner. lan-mouse and the clipboard helper are both supervised and restarted
+if they die; if either keeps exiting, the panel stops respawning it, shows the
+last line of its stderr, and offers a retry button instead of looping forever.
+
+A helper left running by a previous shell is adopted rather than fought with,
+which otherwise shows up as a clipboard that refuses to start because the port
+is already bound.
 
 ## Security
 

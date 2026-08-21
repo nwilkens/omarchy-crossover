@@ -41,7 +41,7 @@ Three layers, each independently useful.
   crossover-clipd           ── TLS/TCP ───▶  crossover-clipd
   (arboard/NSPasteboard)                (wl-clipboard-rs)
                                                 │
-                                         seam plugin (QML)
+                                         Crossover plugin (QML)
                                          bar widget + panel + service
 ```
 
@@ -51,7 +51,7 @@ Three layers, each independently useful.
    platforms. Rides its own TLS/TCP connection because clipboard payloads are
    large and need reliable ordered delivery, which DTLS datagrams are wrong for.
    That is also precisely why upstream has not shipped it.
-3. **Control plane and UX: the Seam plugin.** QML only.
+3. **Control plane and UX: the Crossover plugin.** QML only.
 
 ### Layer 3, the plugin
 
@@ -110,22 +110,28 @@ Assume a hostile host on the same LAN.
   out only to fixed argv arrays, never to a shell string built from peer data.
   Peer hostnames arriving over the network are treated as untrusted input.
 
-## Milestones
+## What shipped
 
-- **M1 Plugin skeleton.** manifest, service, bar widget, panel, lan-mouse
-  detection and install prompt, start/stop, peer list, state polling.
-- **M2 Mac keyboard mode.** virtual-device discovery, per-device xkb remap,
-  toggle and persistence.
-- **M3 Edge assignment and seam indicator.** monitor geometry, config write,
-  edge glow, crossing feedback.
-- **M4 crossover-clipd.** protocol, pinning, both clipboard backends, plugin
-  integration and status.
-- **M5 Packaging.** README with a Mac setup walkthrough, demo GIF, marketplace
-  submission.
+All of it, plus three things the design did not anticipate.
 
-M1 through M3 are the competition entry and stand alone without a Mac; any
-lan-mouse peer works, including another Omarchy box. M4 is the differentiator
-and the thing that makes daily Mac use bearable.
+- **Quickshell 0.3 never emits `connectionStateChanged`**, not even on a
+  successful connect, and a `Socket` whose `connected` is flipped after
+  creation does not reliably attempt the connection. Each attempt now builds a
+  fresh `Socket` through a `Loader`, and link state is derived from traffic
+  arriving rather than from the socket's own property.
+- **Hyprland 0.56 refuses `hyprctl keyword`** under its Lua config parser, so
+  the per-device keyboard rule never reached the compositor. It goes through
+  `hl.device` now, registered by device name so it applies whenever the virtual
+  keyboard appears. That matters because the device only exists while a peer is
+  actually sending input.
+- **Omarchy ships ufw enabled**, and a blocked port is indistinguishable from a
+  peer that is not answering. `scripts/open-firewall.sh` opens 4242 and 4243
+  scoped to one subnet.
+
+Two smaller ones worth recording: lan-mouse takes its backend flag *before* the
+subcommand, and a helper left behind by a previous shell holds the clipboard
+port, so the plugin adopts an existing helper instead of fighting it for the
+bind.
 
 ## Open risks
 

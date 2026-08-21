@@ -147,7 +147,15 @@ function statusToBool(status) {
   return String(status || "") === "Enabled"
 }
 
-function summarize(peers, captureEnabled, emulationEnabled) {
+// A machine can be driving this screen without our own outgoing link to it
+// being up, because the two directions are authorized separately. Reporting
+// only the outgoing side made the bar claim "Reaching peer" while the user was
+// actively typing from that very machine.
+function summarize(peers, incoming) {
+  var driving = incoming ? incoming.length : 0
+  if (driving === 1) return incoming[0].label + " is driving"
+  if (driving > 1) return driving + " machines driving"
+
   if (peers.length === 0) return "No peers"
   var active = 0
   var alive = 0
@@ -163,4 +171,55 @@ function summarize(peers, captureEnabled, emulationEnabled) {
     }
   }
   return alive + " peers linked"
+}
+
+function upsertIncoming(list, entry) {
+  if (!entry || !entry.fingerprint) return list
+  var next = list.slice()
+  for (var i = 0; i < next.length; i++) {
+    if (next[i].fingerprint === entry.fingerprint) {
+      next[i] = Object.assign({}, next[i], entry)
+      return next
+    }
+  }
+  next.push(entry)
+  return next
+}
+
+function removeIncomingByAddr(list, addr) {
+  var host = stripPort(String(addr || ""))
+  var next = []
+  for (var i = 0; i < list.length; i++) {
+    if (stripPort(list[i].addr) !== host) next.push(list[i])
+  }
+  return next
+}
+
+// An incoming connection is identified only by fingerprint and address, so it
+// is named after a configured peer when one shares that address.
+function incomingLabel(peers, addr) {
+  var host = stripPort(String(addr || ""))
+  for (var i = 0; i < peers.length; i++) {
+    if (peers[i].ips.indexOf(host) >= 0) return peers[i].label
+    if (peers[i].activeAddr && stripPort(peers[i].activeAddr) === host) return peers[i].label
+  }
+  return host === "" ? "Unknown machine" : host
+}
+
+function isDrivenBy(incoming, peer) {
+  if (!peer) return false
+  for (var i = 0; i < incoming.length; i++) {
+    var host = stripPort(incoming[i].addr)
+    if (peer.ips.indexOf(host) >= 0) return true
+    if (peer.activeAddr && stripPort(peer.activeAddr) === host) return true
+  }
+  return false
+}
+
+// A bare address goes in fix_ips; anything else is treated as a name to
+// resolve. Getting this wrong means lan-mouse never finds the machine.
+function looksLikeAddress(value) {
+  var text = String(value || "").trim()
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(text)) return true
+  return text.indexOf(":") >= 0 && /^[0-9a-fA-F:]+$/.test(text)
 }
