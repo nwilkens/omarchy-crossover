@@ -74,7 +74,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: swift build --package-path macos
-      - run: shellcheck macos/build/*.sh
 
   model:
     runs-on: ubuntu-latest
@@ -97,4 +96,4 @@ jobs:
       - name: Manifest validates against the Omarchy schema
         run: bash scripts/omarchy-plugin-validate .
       - name: Shell scripts
-        run: shellcheck scripts/*.sh
+        run: shellcheck scripts/*.sh macos/build/*.sh
