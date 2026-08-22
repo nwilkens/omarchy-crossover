@@ -216,6 +216,10 @@ Panel {
     function stop(): string { crossover.stop(); return "ok" }
     function status(): string { return crossover.summary }
     function fingerprint(): string { return crossover.fingerprint }
+    function testSeam(position: string): string {
+      crossover.flashSeam(position === "" ? "left" : position)
+      return "ok"
+    }
     // Support hook: everything needed to tell "not installed" apart from
     // "installed but the daemon will not stay up" without reading QML logs.
     function state(): string {

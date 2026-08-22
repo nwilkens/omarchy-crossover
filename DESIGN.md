@@ -77,8 +77,11 @@ edges that physically exist rather than lan-mouse's abstract left/right/top/
 bottom, then write the matching `position` into lan-mouse's config.
 
 **Seam indicator.** A thin accent-colored edge glow on the monitor bordering
-the Mac, brightening when the cursor leaves and when it returns. This is what
-sells "another monitor" rather than "a remote control".
+the Mac. Shipped, with one limitation found only by testing: lan-mouse emits
+`DeviceEntered` once per connection, not once per crossing
+(`src/service.rs:283` skips the notification when the address is already in
+`incoming_conns`). So the glow marks the handover, not every trip across, and
+the README says so rather than implying otherwise.
 
 ### Layer 2, crossover-clipd
 

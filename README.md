@@ -7,7 +7,10 @@ Control.
 
 It is Universal Control, for a Linux box you actually own.
 
-![Crossover panel](docs/panel.png)
+![Crossover in use](docs/demo.gif)
+
+*A Mac takes control of the Omarchy screen, the panel says so, and the keyboard
+follows.*
 
 ## What it does
 
@@ -26,8 +29,11 @@ It is Universal Control, for a Linux box you actually own.
   separately, so a Mac can be driving this screen while your own link back to
   it is still refused. Machines currently driving you are shown as such, even
   ones you never configured as peers.
-- **A seam.** The screen edge glows briefly when the cursor crosses in, so a
-  pointer arriving from nowhere does not feel like a glitch.
+- **A seam.** The screen edge glows when another machine takes control, so a
+  pointer arriving from nowhere does not read as a glitch. lan-mouse reports an
+  entry once per connection rather than once per crossing, so this marks the
+  handover rather than every trip across the boundary. Preview it any time with
+  `omarchy-shell nwilkens.crossover testSeam left`.
 
 ## Quick start
 

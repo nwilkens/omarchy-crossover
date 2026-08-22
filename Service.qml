@@ -313,6 +313,15 @@ Item {
     })
   }
 
+  // Lets the indicator be previewed without a peer, which is also the only
+  // way to tell a broken indicator apart from an event that never arrived.
+  function flashSeam(position) {
+    enteredPosition = Model.normalizePosition(position)
+    enteredPeer = "test"
+    crossed(enteredPosition, enteredPeer)
+    crossingTimer.restart()
+  }
+
   function noteCrossing(entered) {
     var match = Model.findPeerByFingerprint(peers, fingerprintAddrs, String(entered.fingerprint || ""))
     // The peer sends the edge it left from, so this screen is entered on the
