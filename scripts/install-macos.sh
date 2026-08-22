@@ -145,7 +145,7 @@ else
     echo "No release build available, compiling from source."
     SRC=$(mktemp -d)
     git clone --depth 1 --branch "$CROSSOVER_VERSION" "https://github.com/$REPO.git" "$SRC/repo"
-    cargo install --path "$SRC/repo/clipd" --root "$HOME/.local"
+    cargo install --path "$SRC/repo/clipd" --root "$HOME/.local" --locked
     rm -rf "$SRC"
   else
     rm -f "$CLIPD.part"
