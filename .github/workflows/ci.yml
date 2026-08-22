@@ -41,16 +41,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq qt6-declarative-dev-tools
-      - name: qmllint diagnostics
+      - name: does this qmllint detect the bug at all
         run: |
-          set -x
-          command -v qmllint || true
-          ls -la /usr/lib/qt6/bin/ 2>&1 | head -20 || true
-          dpkg -L qt6-declarative-dev-tools 2>/dev/null | grep -i lint || true
-          QMLLINT=$(command -v qmllint || echo /usr/lib/qt6/bin/qmllint)
-          "$QMLLINT" --version || true
-          echo "--- raw run, exit code captured ---"
-          "$QMLLINT" ./*.qml; echo "exit=$?"
+          sudo apt-get install -y -qq qml6-module-qtquick || true
+          Q=/usr/lib/qt6/bin/qmllint
+          out=$("$Q" ./Service.qml 2>&1 || true)
+          echo "--- readonly hits ---"
+          grep -i "read-only" <<<"$out" || echo "NO READ-ONLY DIAGNOSTIC"
+          echo "--- import status ---"
+          grep -c "Failed to import" <<<"$out" || true
 
   model:
     runs-on: ubuntu-latest
