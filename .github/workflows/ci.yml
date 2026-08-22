@@ -36,20 +36,34 @@ jobs:
   # omarchy clones the default branch and fast-forwards it. A write to a
   # readonly property once shipped this way, threw at runtime, and silently
   # skipped the rest of the function.
+  # Linted on Arch because that is what Omarchy is, and because the qmllint in
+  # Ubuntu's repos is old enough that it emits no category tags and cannot
+  # import QtQuick, which made an earlier version of this job pass on code that
+  # was broken.
   qml:
     runs-on: ubuntu-latest
+    container: archlinux:latest
     steps:
+      - run: pacman -Sy --noconfirm --needed qt6-declarative git
       - uses: actions/checkout@v4
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq qt6-declarative-dev-tools
-      - name: does this qmllint detect the bug at all
+      - name: qmllint
         run: |
-          sudo apt-get install -y -qq qml6-module-qtquick || true
+          set -uo pipefail
           Q=/usr/lib/qt6/bin/qmllint
-          out=$("$Q" ./Service.qml 2>&1 || true)
-          echo "--- readonly hits ---"
-          grep -i "read-only" <<<"$out" || echo "NO READ-ONLY DIAGNOSTIC"
-          echo "--- import status ---"
-          grep -c "Failed to import" <<<"$out" || true
+          [ -x "$Q" ] || { echo "::error::qmllint missing"; exit 2; }
+          # Exit code is not usable here: 0 with warnings, non-zero for
+          # unresolved imports we deliberately ignore.
+          out=$("$Q" ./*.qml 2>&1 || true)
+          # If it analysed nothing it must not report success. Quickshell types
+          # are unresolvable here, so a clean run still produces warnings.
+          [ -n "$out" ] || { echo "::error::qmllint produced no output at all"; exit 2; }
+          # Matched on message text as well as category, so this keeps working
+          # across Qt versions that format diagnostics differently.
+          if grep -niE "cannot assign to read-only property|\[read-only-property\]" <<<"$out"; then
+            echo "::error::write to a readonly property"
+            exit 1
+          fi
+          echo "qmllint: no readonly writes"
 
   model:
     runs-on: ubuntu-latest
