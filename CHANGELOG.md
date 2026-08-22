@@ -6,6 +6,39 @@ commit as the change they describe rather than at release time.
 
 ## [Unreleased]
 
+## [0.5.0]
+
+### Fixed
+
+- The macOS installer skipped the clipboard helper whenever any executable was
+  already there, so re-running the documented upgrade command installed nothing
+  and reported success. It compares versions now.
+- The source build passed no `--locked`, so it resolved whatever TLS crates
+  were current rather than the ones in the lockfile it shipped with.
+- README told you to pin the plugin by checking out a tag. `omarchy plugin
+  update` fast-forwards straight past a detached tag, so that pin survived
+  exactly one update. There is no supported way to hold a version, and the
+  README says so now.
+
+### Added
+
+- CI parses the QML. A write to a readonly property shipped once and threw at
+  runtime; qmllint catches exactly that, and the gate was verified by
+  reintroducing the bug and watching CI block it.
+- `clipd` builds and tests on macOS, where a whole `cfg(target_os)` backend had
+  never been compiled.
+- `scripts/check-pinning.py --write` updates every version marker from
+  `manifest.json`, and now also checks `clipd/Cargo.toml` and that documented
+  URLs point at files that exist.
+- Releases carry a build provenance attestation. `SECURITY.md`, `CHANGELOG.md`,
+  `RELEASING.md`, Dependabot for actions, shellcheck, and the upstream manifest
+  validator.
+
+### Changed
+
+- Every GitHub Action is pinned to a commit SHA, and the repository now
+  requires it.
+
 ## [0.4.0]
 
 ### Fixed

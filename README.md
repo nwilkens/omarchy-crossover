@@ -21,11 +21,11 @@ omarchy plugin enable nwilkens.crossover --section right
 sudo pacman -S lan-mouse
 
 # ufw is on by default and blocks both ports
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/open-firewall.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.5.0/scripts/open-firewall.sh \
   | bash -s -- 192.168.1.0/24
 
 # On the Mac
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/install-macos.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.5.0/scripts/install-macos.sh \
   | bash -s -- <omarchy-ip>
 ```
 
@@ -100,7 +100,7 @@ crossover-clipd add-peer <other-machine-address>
 ## The Mac side
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/install-macos.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.5.0/scripts/install-macos.sh \
   | bash -s -- 10.0.5.1
 ```
 
@@ -213,7 +213,7 @@ the identity it already has in memory.
 Firewall rules come back out with the same script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/open-firewall.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.5.0/scripts/open-firewall.sh \
   | bash -s -- 192.168.1.0/24 --remove
 ```
 
@@ -223,7 +223,7 @@ Check with `sudo ufw status` afterwards. Peers you added live in
 On the Mac:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/uninstall-macos.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.5.0/scripts/uninstall-macos.sh \
   | bash -s -- --yes
 ```
 

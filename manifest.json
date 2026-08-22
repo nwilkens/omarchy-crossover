@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "nwilkens.crossover",
   "name": "Crossover",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": "Nick Wilkens",
   "license": "MIT",
   "description": "Drive this machine from another computer's mouse and keyboard. Peer pairing, edge assignment, Mac keyboard translation, and a shared clipboard, built on lan-mouse.",
