@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::CryptoProvider;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName, UnixTime};
@@ -243,13 +243,6 @@ pub fn ensure_dir(dir: &Path) -> Result<()> {
     if !dir.exists() {
         fs::create_dir_all(dir)?;
         fs::set_permissions(dir, fs::Permissions::from_mode(0o700))?;
-    }
-    Ok(())
-}
-
-pub fn reject_if_empty(peers: &[String]) -> Result<()> {
-    if peers.is_empty() {
-        bail!("no paired peers: run `crossover-clipd pair <fingerprint>` first");
     }
     Ok(())
 }

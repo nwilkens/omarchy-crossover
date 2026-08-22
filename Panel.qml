@@ -255,6 +255,7 @@ Panel {
         clipdRunning: crossover.clipdRunning,
         peers: crossover.peers.length,
         daemonFailures: crossover.daemonFailures,
+        clipdFailures: crossover.clipdFailures,
         opened: root.opened,
         driving: crossover.incoming.length,
         unconfigured: root.strangers.length,

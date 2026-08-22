@@ -69,6 +69,7 @@ final class SupervisedProcess {
     }
 
     private func spawn() {
+        NSLog("crossover: spawning %@", executable.path)
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {
             lastError = "missing: \(executable.lastPathComponent)"
             gaveUp = true
@@ -131,12 +132,22 @@ final class SupervisedProcess {
 /// would then be attributed to the wrong bundle.
 enum InputHelper {
     static func launch(arguments: [String]) {
-        guard let app = BundledHelper.inputAppURL,
-              FileManager.default.fileExists(atPath: app.path) else { return }
+        guard let app = BundledHelper.inputAppURL else {
+            NSLog("crossover: no helper URL")
+            return
+        }
+        guard FileManager.default.fileExists(atPath: app.path) else {
+            NSLog("crossover: helper missing at %@", app.path)
+            return
+        }
+        NSLog("crossover: launching helper at %@", app.path)
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.arguments = arguments
         configuration.activates = false
-        NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, _ in }
+        NSWorkspace.shared.openApplication(at: app, configuration: configuration) { running, error in
+            if let error { NSLog("crossover: helper launch failed: %@", error.localizedDescription) }
+            else { NSLog("crossover: helper launched pid %d", running?.processIdentifier ?? -1) }
+        }
     }
 
     static var isRunning: Bool {

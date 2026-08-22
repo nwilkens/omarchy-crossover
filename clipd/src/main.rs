@@ -139,7 +139,16 @@ async fn run(
         Err(err) => log::warn!("could not read {}: {err}", import_path.display()),
     }
 
-    tls::reject_if_empty(&cfg.authorized)?;
+    // Deliberately not fatal. An unpaired daemon is harmless: the verifier
+    // refuses every certificate and there is nobody to push to. Exiting here
+    // instead meant a fresh install looked broken until the user happened to
+    // pair, because the thing that reports "not running" is the same thing
+    // pairing is supposed to fix.
+    if cfg.authorized.is_empty() {
+        log::warn!(
+            "no paired peers yet; run `crossover-clipd pair <fingerprint>` to start syncing"
+        );
+    }
 
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let pinned = Arc::new(tls::PinnedPeers::new(cfg.authorized.clone(), provider));

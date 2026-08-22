@@ -133,6 +133,11 @@ Item {
     actionStatus = "Stopping"
     wantDaemon = false
     daemonFailures = 0
+    // Switching sharing off and on again is the obvious way to retry, so it
+    // has to clear the give-up latch too. Without this the only way back was
+    // the retry button, and a helper that failed while nothing was paired
+    // stayed dead long after pairing fixed it.
+    clipdFailures = 0
     daemonProcess.running = false
     dropLink()
     watchdogTimer.stop()
