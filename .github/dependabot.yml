@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Actions only. The Cargo lockfile is 180+ packages of steady churn that a
+  # part-time maintainer stops reading; the security value there comes from
+  # Dependabot alerts, which are enabled on the repository, not from a stream
+  # of version-bump PRs.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+    ignore:
+      # Its "stable" ref is a branch by design, and pinning it needs the
+      # toolchain input set explicitly. Bump it by hand.
+      - dependency-name: dtolnay/rust-toolchain

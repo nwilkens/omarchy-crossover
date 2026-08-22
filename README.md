@@ -72,13 +72,13 @@ provenance, since a git tag can be moved and `SHA256SUMS` is published
 unsigned next to the thing it describes. If that matters to you, check out a
 commit SHA and build it yourself.
 
-Same for the plugin itself. `omarchy plugin add` clones the default branch and
-takes no ref, so you track `main` and `omarchy plugin update` fast-forwards it.
-Pin it yourself if you'd rather not:
-
-```bash
-git -C ~/.config/omarchy/plugins/nwilkens.crossover checkout v0.4.0
-```
+The plugin itself is different. `omarchy plugin add` clones the default branch
+and takes no ref, and `omarchy plugin update` does `git merge --ff-only`, so
+you track `main`. Checking out a tag in the plugin directory does not hold:
+the next update fast-forwards straight past it. There is no supported way to
+sit on an older version, and running `git pull` in there yourself will fight
+the updater. If you need a fixed revision, clone it somewhere else and point
+`~/.config/omarchy/plugins/nwilkens.crossover` at that.
 
 ## Pairing
 
@@ -270,7 +270,8 @@ stall inbound sync until it stops.
 If a shared clipboard for passwords isn't a trade you want, set `clipboardSync`
 to `false` and use Crossover for input only.
 
-Open an issue if you find a problem.
+Found a security bug? Use [private vulnerability reporting](https://github.com/nwilkens/omarchy-crossover/security/advisories/new)
+rather than the public tracker. Details in [SECURITY.md](SECURITY.md).
 
 ## What it runs and what it writes
 

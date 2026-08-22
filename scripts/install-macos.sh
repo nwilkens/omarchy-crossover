@@ -108,10 +108,15 @@ else
 fi
 
 # ------------------------------------------------------------ clipboard helper
-if [[ -x $CLIPD ]]; then
-  say "Clipboard helper is already installed"
+# Compare versions rather than testing for the file: an -x test made every
+# re-run a silent no-op, which is exactly how a Mac ends up running an old
+# helper against a freshly updated plugin.
+HAVE_CLIPD=""
+[[ -x $CLIPD ]] && HAVE_CLIPD=$("$CLIPD" --version 2>/dev/null | awk 'NR==1{print $NF}' || true)
+if [[ -n $HAVE_CLIPD && $HAVE_CLIPD == "${CROSSOVER_VERSION#v}" ]]; then
+  say "Clipboard helper is already at $HAVE_CLIPD"
 else
-  say "Installing the clipboard helper $CROSSOVER_VERSION"
+  say "Installing the clipboard helper $CROSSOVER_VERSION${HAVE_CLIPD:+ (replacing $HAVE_CLIPD)}"
   mkdir -p "$(dirname "$CLIPD")"
   case "$(uname -m)" in
     arm64) CLIPD_ASSET="crossover-clipd-aarch64-macos" ;;
@@ -119,6 +124,7 @@ else
   esac
   BASE="https://github.com/$REPO/releases/download/$CROSSOVER_VERSION"
 
+  rm -f "$CLIPD.part"
   if curl -fsSL -o "$CLIPD.part" "$BASE/$CLIPD_ASSET"; then
     # The checksums live at the same immutable tag as the binary.
     SUMS=$(curl -fsSL "$BASE/SHA256SUMS")
@@ -196,6 +202,7 @@ if [[ -n $SSH_TARGET ]]; then
 
   # The helper may sit in PATH or in either of the two places our installers
   # use, so the remote side reports back whichever it actually has.
+  # shellcheck disable=SC2016  # deliberate: this expands on the remote host
   FIND_REMOTE='c=$(command -v crossover-clipd 2>/dev/null || true);
     for f in "$HOME/.local/bin/crossover-clipd" "$HOME/.cargo/bin/crossover-clipd"; do
       [ -n "$c" ] && break

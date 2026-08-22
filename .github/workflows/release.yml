@@ -28,7 +28,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - run: cargo build --release --target ${{ matrix.target }}
+      - run: cargo build --locked --release --target ${{ matrix.target }}
         working-directory: clipd
       - run: cp clipd/target/${{ matrix.target }}/release/crossover-clipd ${{ matrix.name }}
       - uses: actions/upload-artifact@v4
@@ -41,6 +41,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Provenance binds these bytes to this workflow and commit. Without it,
+      # SHA256SUMS only proves the download was not corrupted in transit.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -49,6 +53,13 @@ jobs:
       # that lives at the same immutable tag.
       - name: Generate checksums
         run: sha256sum crossover-clipd-* | tee SHA256SUMS
+      # One attestation over the checksum file rather than three over the
+      # binaries: the predicate records the workflow and commit, not which
+      # matrix leg produced a given file, so the claim is the same.
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-checksums: SHA256SUMS
+
       - uses: softprops/action-gh-release@v2
         with:
           files: |

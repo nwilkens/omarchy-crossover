@@ -5,21 +5,58 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   clipd:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libwayland-dev
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libwayland-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      - run: cargo fmt --check
+      - if: runner.os == 'Linux'
+        run: cargo fmt --check
         working-directory: clipd
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --locked --all-targets -- -D warnings
         working-directory: clipd
-      - run: cargo test
+      # The macOS leg exists because clip.rs has a whole cfg(target_os="macos")
+      # backend that never compiled in CI, and only `cargo test` links it.
+      - run: cargo test --locked
         working-directory: clipd
+
+  # The QML is the one artifact that reaches users with no release gate at all:
+  # omarchy clones the default branch and fast-forwards it. A write to a
+  # readonly property once shipped this way, threw at runtime, and silently
+  # skipped the rest of the function.
+  qml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq qt6-declarative-dev-tools
+      - name: qmllint
+        run: |
+          set -euo pipefail
+          QMLLINT=$(command -v qmllint || echo /usr/lib/qt6/bin/qmllint)
+          [ -x "$QMLLINT" ] || { echo "::error::qmllint not found"; exit 2; }
+          # Its exit code is not usable: 0 on warnings, 255 on unrelated
+          # infrastructure problems. Grep for the categories that are real bugs
+          # rather than artifacts of Quickshell types it cannot resolve.
+          FATAL='read-only-property|syntax|unreachable-code|assignment-in-condition|duplicated-name|duplicate-property-binding|var-used-before-declaration|eval|with'
+          out=$("$QMLLINT" ./*.qml 2>&1 || true)
+          if grep -q 'Failed to open file' <<<"$out"; then echo "$out"; exit 2; fi
+          if grep -E "\[($FATAL)\]" <<<"$out"; then
+            echo "::error::qmllint reported a fatal category"
+            exit 1
+          fi
+          echo "qmllint clean"
 
   model:
     runs-on: ubuntu-latest
@@ -30,41 +67,16 @@ jobs:
           node-version: "22"
       - run: node --test tests/*.test.mjs
 
-  pinning:
+  plugin:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 scripts/check-pinning.py
-
-  manifest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # The shell's own validator is not available here, so check the parts of
-      # it that are pure data: schema version, required fields, and that every
-      # declared entry point actually exists.
-      - name: Validate manifest
-        run: |
-          python3 - <<'PY'
-          import json, os, sys
-          m = json.load(open("manifest.json"))
-          required = ["schemaVersion", "id", "name", "version", "author", "description", "kinds", "entryPoints"]
-          missing = [k for k in required if k not in m]
-          assert not missing, f"missing manifest fields: {missing}"
-          assert m["schemaVersion"] == 1, "unexpected schemaVersion"
-          assert not m["id"].startswith("omarchy."), "the omarchy. namespace is reserved"
-          for kind in m["kinds"]:
-              key = {"bar-widget": "barWidget"}.get(kind, kind)
-              entry = m["entryPoints"].get(key)
-              assert entry, f"no entry point for kind {kind}"
-              assert not os.path.isabs(entry) and ".." not in entry, f"unsafe entry point {entry}"
-              assert os.path.exists(entry), f"missing entry point file {entry}"
-              assert not os.path.islink(entry), f"entry point is a symlink: {entry}"
-          for root, dirs, files in os.walk("."):
-              if ".git" in root:
-                  continue
-              for name in dirs + files:
-                  p = os.path.join(root, name)
-                  assert not os.path.islink(p), f"symlinks are rejected by the shell: {p}"
-          print("manifest ok")
-          PY
+      - name: Install paths are pinned and consistent
+        run: python3 scripts/check-pinning.py
+      # This is the validator omarchy-plugin-update runs after fast-forwarding,
+      # resetting the checkout when it fails. Vendored so the gate here is the
+      # same one users hit.
+      - name: Manifest validates against the Omarchy schema
+        run: bash scripts/omarchy-plugin-validate .
+      - name: Shell scripts
+        run: shellcheck scripts/*.sh
