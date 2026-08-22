@@ -32,6 +32,12 @@ MARKERS = [
 ]
 # Cargo.toml carries the bare version, and it is what `--version` prints.
 CARGO = ("clipd/Cargo.toml", re.compile(r'(?m)^(version\s*=\s*")([^"]+)(")'))
+# Cargo.lock records the package's own version too, and `cargo build --locked`
+# refuses to run when the two disagree.
+CARGO_LOCK = (
+    "clipd/Cargo.lock",
+    re.compile(r'(?ms)(\[\[package\]\]\nname = "crossover-clipd"\nversion = ")([^"]+)(")'),
+)
 
 
 def tracked_files():
@@ -75,12 +81,12 @@ def main() -> int:
             if found != tag:
                 problems.append(f"{rel}: pinned to {found}, expected {tag}")
 
-    for name, pattern in MARKERS + [CARGO]:
+    for name, pattern in MARKERS + [CARGO, CARGO_LOCK]:
         path = ROOT / name
         if not path.is_file():
             problems.append(f"{name}: file is missing")
             continue
-        want = version if name.endswith("Cargo.toml") else tag
+        want = version if ("Cargo.toml" in name or "Cargo.lock" in name) else tag
         text = path.read_text()
         match = pattern.search(text)
         if not match:
