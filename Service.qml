@@ -139,7 +139,7 @@ Item {
     // The device name is a constant now, so assigning to it threw a TypeError
     // here and aborted the rest of stop(), leaving the clipboard helper running
     // after the user switched sharing off.
-    clearMacKeyboard()
+    virtualKeyboardName = ""
     stopClipd()
   }
 
