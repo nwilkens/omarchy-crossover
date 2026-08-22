@@ -58,6 +58,13 @@ USAGE
   exit 1
 fi
 
+if [[ -n $SSH_TARGET && $SSH_TARGET == -* ]]; then
+  # ssh would read a leading-dash value as an option, and options like
+  # -oProxyCommand=... execute locally.
+  echo "--ssh target must not begin with '-': $SSH_TARGET" >&2
+  exit 1
+fi
+
 case "$POSITION" in
   left|right|top|bottom) ;;
   *) echo "position must be left, right, top, or bottom" >&2; exit 1 ;;
@@ -195,7 +202,7 @@ if [[ -n $SSH_TARGET ]]; then
       [ -x "$f" ] && c="$f"
     done
     [ -n "$c" ] && printf %s "$c"'
-  REMOTE_BIN=$(ssh "$SSH_TARGET" "$FIND_REMOTE" 2>/dev/null | tr -d '\r')
+  REMOTE_BIN=$(ssh -- "$SSH_TARGET" "$FIND_REMOTE" 2>/dev/null | tr -d '\r')
 
   if [[ -z $REMOTE_BIN ]]; then
     echo "crossover-clipd is not installed on $SSH_TARGET yet." >&2
@@ -203,16 +210,16 @@ if [[ -n $SSH_TARGET ]]; then
     exit 1
   fi
 
-  REMOTE_FP=$(ssh "$SSH_TARGET" "'$REMOTE_BIN' fingerprint" | tr -d '\r')
+  REMOTE_FP=$(ssh -- "$SSH_TARGET" "'$REMOTE_BIN' fingerprint" | tr -d '\r')
   if [[ -z $REMOTE_FP ]]; then
     echo "Could not read the fingerprint from $SSH_TARGET." >&2
     exit 1
   fi
 
   MAC_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
-  ssh "$SSH_TARGET" "'$REMOTE_BIN' pair '$MAC_FP'" >/dev/null
+  ssh -- "$SSH_TARGET" "'$REMOTE_BIN' pair '$MAC_FP'" >/dev/null
   if [[ -n $MAC_IP ]]; then
-    ssh "$SSH_TARGET" "'$REMOTE_BIN' add-peer '$MAC_IP'" >/dev/null
+    ssh -- "$SSH_TARGET" "'$REMOTE_BIN' add-peer '$MAC_IP'" >/dev/null
   else
     echo "Could not determine this Mac's IP; add it on the Omarchy side with:"
     echo "  crossover-clipd add-peer <this-mac-ip>"

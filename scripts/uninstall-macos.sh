@@ -9,6 +9,8 @@ set -euo pipefail
 APP="/Applications/Lan Mouse.app"
 AGENTS="$HOME/Library/LaunchAgents"
 LABEL_CLIP="com.nwilkens.crossover.clipd"
+# Not created by the current installer, which runs Lan Mouse as a normal app.
+# Still unloaded here so machines set up by an earlier version come clean.
 LABEL_MOUSE="com.nwilkens.crossover.lan-mouse"
 CONFIG_LM="$HOME/.config/lan-mouse/config.toml"
 CONFIG_XO="$HOME/.config/crossover"
@@ -52,6 +54,8 @@ echo "LaunchAgents removed."
 say "Removing the clipboard helper"
 for bin in "$HOME/.local/bin/crossover-clipd" "$HOME/.cargo/bin/crossover-clipd"; do
   [[ -e $bin ]] && rm -f "$bin" && echo "removed $bin"
+  # A download that failed verification leaves this behind.
+  [[ -e "$bin.part" ]] && rm -f "$bin.part" && echo "removed $bin.part"
 done
 
 if [[ $KEEP_APP -eq 0 && -d $APP ]]; then

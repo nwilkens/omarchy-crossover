@@ -37,8 +37,6 @@ follows.*
 
 ## Quick start
 
-Three commands, one on each machine plus a firewall rule.
-
 ```bash
 # 1. On Omarchy: install the plugin and lan-mouse
 omarchy plugin add https://github.com/nwilkens/omarchy-crossover.git
@@ -49,15 +47,22 @@ sudo pacman -S lan-mouse
 curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/open-firewall.sh \
   | bash -s -- 192.168.1.0/24
 
-# 3. On the Mac: everything, in one line
+# 3. On Omarchy: the clipboard helper, if you want a shared clipboard
+#    (see "The clipboard helper" below for the checksum-verified commands)
+
+# 4. On the Mac: everything else, in one line
 curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/install-macos.sh \
-  | bash -s -- <omarchy-ip> --ssh you@<omarchy-ip>
+  | bash -s -- <omarchy-ip>
 ```
 
-Open the Crossover panel on the bar and it shows you step 3 with your own
+Open the Crossover panel on the bar and it shows you step 4 with your own
 address already filled in, so you never have to go find it. Approve the
 fingerprint on both ends, grant Lan Mouse the macOS permissions it asks for,
 and push your cursor off the edge.
+
+Add `--ssh you@<omarchy-ip>` to step 4 to pair the clipboard automatically in
+both directions. It needs step 3 done first, because it looks for
+`crossover-clipd` on the Omarchy machine and stops if it is not there.
 
 ## Requirements
 
@@ -74,29 +79,48 @@ omarchy plugin enable nwilkens.crossover --section right
 
 If `lan-mouse` is missing the panel says so and hands you the command.
 
+`omarchy plugin add` clones the default branch and takes no ref, so the plugin
+checkout tracks `main` and `omarchy plugin update` fast-forwards it. To fix the
+plugin at a reviewed revision, pin the checkout with git afterwards:
+
+```bash
+git -C ~/.config/omarchy/plugins/nwilkens.crossover checkout v0.3.0
+```
+
 ### The clipboard helper (Omarchy side)
 
 The plugin cannot install binaries: `omarchy plugin add` deliberately never
-runs an install hook. Grab a release build, or compile it yourself:
+runs an install hook. Grab a release build, or compile it yourself.
+
+The download is verified before it becomes an executable on your PATH, so a
+corrupt or substituted file is never installed:
 
 ```bash
-# prebuilt, pinned to a release tag and checked against the SHA256SUMS
-# published at that same tag
+set -e
 V=v0.3.0
 BASE=https://github.com/nwilkens/omarchy-crossover/releases/download/$V
-mkdir -p ~/.local/bin
-curl -fsSL "$BASE/crossover-clipd-x86_64-linux" -o ~/.local/bin/crossover-clipd
+TMP=$(mktemp -d)
+curl -fsSL "$BASE/crossover-clipd-x86_64-linux" -o "$TMP/crossover-clipd"
 curl -fsSL "$BASE/SHA256SUMS" | grep crossover-clipd-x86_64-linux \
-  | sed 's#crossover-clipd-x86_64-linux#'"$HOME"'/.local/bin/crossover-clipd#' | sha256sum -c -
-chmod +x ~/.local/bin/crossover-clipd
-
-# or from source, from the same tag
-cargo install --path ~/.config/omarchy/plugins/nwilkens.crossover/clipd
+  | sed "s#crossover-clipd-x86_64-linux#$TMP/crossover-clipd#" | sha256sum -c -
+mkdir -p ~/.local/bin
+install -m755 "$TMP/crossover-clipd" ~/.local/bin/crossover-clipd
+rm -rf "$TMP"
 ```
 
-Nothing here follows `main` or `latest`: the install command, the helper
-binary, and its checksum all come from one immutable tag, so what you run is
-the revision that was reviewed.
+Or from source at the same tag:
+
+```bash
+git clone --branch v0.3.0 --depth 1 https://github.com/nwilkens/omarchy-crossover.git /tmp/crossover-src
+cargo install --path /tmp/crossover-src/clipd --locked
+```
+
+What that does and does not give you: the binary and its checksum both come
+from one release tag, so a corrupted or swapped download is caught. A git tag
+is still a movable ref that the repository owner can re-point, and the checksum
+file is published unsigned beside the binary, so this detects corruption rather
+than proving provenance. For a hard guarantee, check out a commit SHA and build
+from source.
 
 ## Open the ports first
 
@@ -139,43 +163,40 @@ One command on the Mac. No repo to clone, no Rust toolchain, no compiling:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/install-macos.sh \
-  | bash -s -- 10.0.5.1 --ssh you@10.0.5.1
+  | bash -s -- 10.0.5.1
 ```
 
 Replace `10.0.5.1` with your Omarchy machine's address. The Crossover panel
 shows you this exact line, with the address already filled in, under
 **Set up another machine**.
 
-The `--ssh` part is optional and only used to pair the clipboard in both
-directions without copy-pasting fingerprints between machines. Drop it and the
-script prints the fingerprints for you to exchange by hand.
+It downloads the official `Lan Mouse.app` (pinned to a tag and checked against
+a SHA-256 recorded in the script), clears the Gatekeeper quarantine flag that
+otherwise makes an ad-hoc signed app look corrupt, installs the clipboard
+helper and one LaunchAgent for it, and points Lan Mouse at your Omarchy
+machine.
 
-It downloads the official `Lan Mouse.app`, clears the Gatekeeper quarantine
-flag that otherwise makes an ad-hoc signed app look corrupt, installs the
-clipboard helper and its LaunchAgent, points Lan Mouse at your Omarchy machine,
-and pairs the clipboard in both directions over ssh.
+Options:
 
-Drop `--ssh` and it prints the fingerprints for you to exchange by hand.
-Use `--position right` if the Omarchy machine sits to the right of your Mac.
+- `--ssh you@10.0.5.1` pairs the clipboard in both directions instead of making
+  you copy fingerprints between machines. It runs `crossover-clipd` commands on
+  the Omarchy machine over ssh, so install the helper there first, and note it
+  does write pairing state on that machine.
+- `--position right` if the Omarchy machine sits to the right of your Mac.
 
-That installs lan-mouse and the clipboard agent and walks you through pairing.
-Two things it cannot do for you:
+Then one thing only you can do: **grant Lan Mouse permission**. macOS will not
+let anything read your mouse and keyboard until you say so.
 
-1. macOS will not let anything read your mouse and keyboard until you grant
-   permission. System Settings > Privacy & Security, under **Accessibility**
-   and again under **Input Monitoring**, adding `~/.cargo/bin/lan-mouse`.
+The installer opens the app so macOS prompts you. If it does not, add it by
+hand under System Settings > Privacy & Security, in **Accessibility** and again
+in **Input Monitoring**, choosing `/Applications/Lan Mouse.app`.
 
-   The grant is per binary, and a LaunchAgent gets no prompt: started by
-   launchd it simply logs `accessibility permission is required` and gives up.
-   So run it once from Terminal first, approve both prompts, then load the
-   agent:
+The grant is per application and launchd never shows the prompt, which is why
+this installer runs Lan Mouse as a normal app rather than as a LaunchAgent. To
+start it with you, add it under System Settings > General > Login Items.
 
-   ```bash
-   lan-mouse --emulation-backend mac-os daemon   # approve the prompts, Ctrl-C
-   launchctl kickstart -p gui/$UID/com.nwilkens.crossover.lan-mouse
-   ```
-2. lan-mouse needs to know which edge the Omarchy machine sits on. Set that in
-   the lan-mouse window.
+Finally, approve the Omarchy machine's fingerprint in the Lan Mouse window, and
+approve the Mac's fingerprint in the Crossover panel on the Omarchy side.
 
 ## Mac keyboard translation
 
@@ -255,12 +276,21 @@ Nothing here is hidden, and all of it comes back out.
 
 **On Omarchy**
 
+Disabling or removing the plugin stops both daemons, because the plugin tears
+them down when it is unloaded. The `pkill` line is belt and braces for the case
+where the shell was killed rather than asked to stop:
+
 ```bash
-omarchy plugin remove nwilkens.crossover     # stops the daemons it manages
-sudo pacman -Rns lan-mouse                   # only if you want lan-mouse gone
+omarchy plugin remove nwilkens.crossover
+pkill -x crossover-clipd; pkill -x lan-mouse   # only if either is still up
+sudo pacman -Rns lan-mouse                     # only if you want lan-mouse gone
 rm -f ~/.local/bin/crossover-clipd ~/.cargo/bin/crossover-clipd
-rm -rf ~/.config/crossover                   # identity and paired fingerprints
+rm -rf ~/.config/crossover                     # identity and paired fingerprints
 ```
+
+Stop the helper before deleting `~/.config/crossover`: a running daemon has
+already loaded its identity into memory and keeps accepting paired peers until
+it exits.
 
 If you opened the firewall, take those rules back out with the same script:
 
@@ -269,9 +299,12 @@ curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/s
   | bash -s -- 192.168.1.0/24 --remove
 ```
 
+Confirm with `sudo ufw status`; the script prints what remains rather than
+assuming the deletions took.
+
 Peers you added live in `~/.config/lan-mouse/config.toml`; delete it if you are
-removing lan-mouse too. The Mac keyboard rule is applied at runtime and is gone
-the moment the plugin stops, so there is nothing to undo in your Hyprland
+removing lan-mouse too. The Mac keyboard rule is applied at runtime and is
+cleared when sharing stops, so there is nothing to undo in your Hyprland
 config.
 
 **On the Mac**
@@ -281,11 +314,15 @@ curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/s
   | bash -s -- --yes
 ```
 
-That unloads and deletes both LaunchAgents, kills the processes, removes
-`/Applications/Lan Mouse.app` and `~/.local/bin/crossover-clipd`, restores any
-lan-mouse config it replaced, and clears its logs. Run it without `--yes` from
-a terminal to be asked before the app and your paired identity are deleted, or
-pass `--keep-lan-mouse` to leave the app in place.
+That unloads and deletes the clipboard LaunchAgent, kills the processes,
+removes `/Applications/Lan Mouse.app` and `~/.local/bin/crossover-clipd`,
+restores any lan-mouse config it replaced, and clears its logs. Run it without
+`--yes` from a terminal to be asked before the app and your paired identity are
+deleted, or pass `--keep-lan-mouse` to leave the app in place.
+
+If you used `--ssh` when installing, that also wrote pairing state on the
+Omarchy machine. Undo it there with `rm -rf ~/.config/crossover`, or drop just
+the Mac with `crossover-clipd revoke <mac-fingerprint>`.
 
 Two things a script is not allowed to do for you: macOS keeps the
 **Accessibility** and **Input Monitoring** entries after an app is deleted, so
@@ -295,19 +332,38 @@ remove it from **Login Items** if you added it there.
 ## Security
 
 The clipboard carries passwords, so `crossover-clipd` is built to be boring
-about it:
+about it. What it does:
 
 - Both ends present a certificate and pin the other's SHA-256 fingerprint.
-  Unknown peers are refused. There is no trust-on-first-use path.
-- Traffic is TLS 1.3. The private key is written `0600` and never leaves the
-  machine.
-- A selection marked `x-kde-passwordManagerHint` is never transmitted, which is
-  the hint password managers set for exactly this reason. On macOS, `arboard`
-  does not expose pasteboard types yet, so the equivalent
-  `org.nspasteboard.ConcealedType` check is not in place on that side.
+  Unknown peers are refused in both directions. There is no trust-on-first-use
+  path.
+- Traffic is TLS, negotiated by rustls with TLS 1.3 and TLS 1.2 enabled. The
+  private key is written `0600` and never leaves the machine.
 - Payloads are size capped, digest checked, and the receiver allocates only
   after the cap check, never on the sender's claimed length.
-- Inbound sessions are limited so a peer cannot exhaust file descriptors.
+- Inbound sessions are capped at eight, and a handshake gets a much shorter
+  deadline than a completed exchange so an unauthenticated peer cannot sit on a
+  slot for long.
+- Approving a new machine requires the cursor to be on the approval card. A
+  connection attempt can never redirect a keypress aimed at something else into
+  granting trust, and a denied fingerprint stays denied for the session.
+
+Where it is weaker than you might assume, stated plainly:
+
+- **The password-manager check is best effort, not a guarantee.** On Linux a
+  selection marked `x-kde-passwordManagerHint` is skipped, but the hint and the
+  contents are read in two separate clipboard round trips, so a copy landing
+  between them can still be sent. On macOS there is no check at all yet:
+  `arboard` does not expose pasteboard types, so `org.nspasteboard.ConcealedType`
+  is not consulted and passwords copied on the Mac are transmitted.
+- **A received payload loses the hint.** The receiving side writes plain text,
+  so a clipboard history manager there may persist it.
+- **The eight-session cap is availability, not authentication.** A host on your
+  subnet that opens sockets and never speaks can still make inbound sync stall
+  until it stops.
+
+If a shared clipboard for passwords is not a trade you want, set
+`clipboardSync` to `false` and use Crossover for input only.
 
 Report anything that looks wrong by opening an issue.
 
@@ -329,25 +385,42 @@ Processes the QML actually spawns, all as your own user:
 | `crossover-clipd run` | the clipboard helper, if installed |
 | `hyprctl` | read monitors and devices, apply the keyboard rule |
 | `wl-copy` | the click-to-copy actions in the panel |
-| `which`, `sh -c`, `pgrep` | locate binaries, detect an already-running helper |
+| `which`, `pgrep` | locate the helper, detect one already running |
+| `sh -c` | two fixed pipelines: locating `crossover-clipd`, and reading this machine's LAN address with `ip`, `sed`, and `head` |
 | `pkill -x crossover-clipd` | stop the clipboard helper when you switch it off |
 
-The two shell scripts are **optional, run by you, and never invoked by the
+Peer-supplied values (hostnames, addresses, fingerprints arriving over
+lan-mouse's IPC socket) are never interpolated into any of these. Commands are
+built as fixed argument arrays.
+
+The three shell scripts are **optional, run by you, and never invoked by the
 plugin**:
 
 - `scripts/open-firewall.sh` runs on the Omarchy machine and calls `sudo ufw`
   or `sudo firewall-cmd` to open ports 4242 and 4243 to one subnet you name. It
   reads service state with `systemctl is-active` to pick between the two; it
   does not start, stop, or enable any service.
-- `scripts/install-macos.sh` runs **on macOS only** and never touches the
-  Omarchy machine. It downloads the official `Lan Mouse.app` and the clipboard
-  helper into your home directory, writes `~/.config/lan-mouse/config.toml`
-  (backing up any existing file first), and installs a LaunchAgent.
+- `scripts/install-macos.sh` runs on macOS. With `--ssh` it also runs three
+  `crossover-clipd` subcommands on the Omarchy machine over ssh (`fingerprint`,
+  `pair`, `add-peer`), which write `~/.config/crossover` there.
+- `scripts/uninstall-macos.sh` reverses the macOS installer.
 
-Nothing is written outside `~/.config/lan-mouse`, `~/.config/crossover`, and
-the plugin's own checkout. No sudoers changes. No bundled binaries in this
-repository; the release binaries are built by GitHub Actions from the `clipd`
-source here.
+What gets written, in full:
+
+| Path | By |
+| --- | --- |
+| `~/.config/omarchy/plugins/nwilkens.crossover/` | `omarchy plugin add` |
+| `~/.config/crossover/` (identity, paired fingerprints) | the clipboard helper, on either machine |
+| `~/.config/lan-mouse/config.toml` | lan-mouse, and the macOS installer, which backs up an existing file |
+| `/Applications/Lan Mouse.app` | the macOS installer |
+| `~/.local/bin/crossover-clipd` | the macOS installer, and the documented Linux install |
+| `~/Library/LaunchAgents/com.nwilkens.crossover.clipd.plist` | the macOS installer |
+| `~/Library/Logs/crossover-clipd.log` | that LaunchAgent |
+| ufw or firewalld rules for 4242 and 4243 | `open-firewall.sh`, only if you run it |
+
+No sudoers changes. No binaries committed to this repository; the release
+builds are produced by GitHub Actions from the `clipd` source here. Every item
+above has a removal command in [Removing it](#removing-it).
 
 ## How it works
 

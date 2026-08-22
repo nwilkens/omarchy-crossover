@@ -32,6 +32,10 @@ Item {
   property string fingerprint: ""
   property var authorized: ({})
   property string pendingFingerprint: ""
+  // Denied fingerprints stay denied for this session. Without this, a machine
+  // that is refused can simply reconnect and raise the prompt again until it
+  // catches someone pressing Enter.
+  property var dismissedFingerprints: ({})
   property string lastError: ""
   property string actionStatus: ""
   property var monitors: []
@@ -132,8 +136,10 @@ Item {
     daemonProcess.running = false
     dropLink()
     watchdogTimer.stop()
-    macKeyboardState = "off"
-    virtualKeyboardName = ""
+    // The device name is a constant now, so assigning to it threw a TypeError
+    // here and aborted the rest of stop(), leaving the clipboard helper running
+    // after the user switched sharing off.
+    clearMacKeyboard()
     stopClipd()
   }
 
@@ -178,6 +184,14 @@ Item {
     request("AuthorizeKey", [String(description || "crossover"), String(fp)])
     request("SaveConfiguration")
     if (pendingFingerprint === fp) pendingFingerprint = ""
+  }
+
+  function dismissPending() {
+    if (pendingFingerprint === "") return
+    var next = Object.assign({}, dismissedFingerprints)
+    next[pendingFingerprint] = true
+    dismissedFingerprints = next
+    pendingFingerprint = ""
   }
 
   function revoke(fp) {
@@ -266,7 +280,10 @@ Item {
         break
       case "ConnectionAttempt":
         var attempt = event.value || {}
-        if (Model.isValidFingerprint(attempt.fingerprint)) pendingFingerprint = String(attempt.fingerprint)
+        var candidate = String(attempt.fingerprint || "")
+        if (Model.isValidFingerprint(candidate) && !dismissedFingerprints[candidate]) {
+          pendingFingerprint = candidate
+        }
         break
       case "DeviceConnected":
         var connected = event.value || {}
@@ -354,6 +371,17 @@ Item {
     keywordProcess.running = true
   }
 
+  // Drops the Cmd/Ctrl swap without waiting for a setting change, so stopping
+  // really does leave the compositor as it was found.
+  function clearMacKeyboard() {
+    macKeyboardState = "off"
+    if (!installed) return
+    var lua = 'hl.device({ name = "' + virtualKeyboardName + '", kb_options = "' + keyboardOptions(false) + '" })'
+    keywordProcess.mode = "clear"
+    keywordProcess.command = ["hyprctl", "eval", lua]
+    keywordProcess.running = true
+  }
+
   function verifyMacKeyboard() {
     devicesProcess.command = ["hyprctl", "-j", "devices"]
     devicesProcess.running = true
@@ -374,7 +402,10 @@ Item {
   }
 
   function startClipd() {
-    if (!clipboardSync || !clipdInstalled || clipdProcess.running || clipdGaveUp) return
+    // Tied to the sharing intent, not just to the setting: with autostart off,
+    // the helper used to bind its port at login anyway while the panel's power
+    // switch read "off" and could not stop it.
+    if (!wantDaemon || !clipboardSync || !clipdInstalled || clipdProcess.running || clipdGaveUp) return
     clipdProcess.command = [clipdBinary(), "run", "--peer-config",
                             Quickshell.env("HOME") + "/.config/lan-mouse/config.toml"]
     clipdProcess.running = true
@@ -658,7 +689,7 @@ Item {
         // Probe rather than spawn: a helper from a previous shell may already
         // be running, and spawning into an occupied port burns the retry
         // budget before adoption ever gets a chance.
-        if (root.clipdInstalled && root.clipboardSync) clipdProbe.running = true
+        if (root.clipdInstalled && root.clipboardSync && root.autostart) clipdProbe.running = true
       }
     }
   }

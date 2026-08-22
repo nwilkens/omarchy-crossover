@@ -18,6 +18,10 @@ use tokio_rustls::{TlsAcceptor, TlsConnector};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const EXCHANGE_TIMEOUT: Duration = Duration::from_secs(20);
+/// An inbound slot is held from accept() onward, so an unauthenticated peer
+/// that opens sockets and never speaks would otherwise hold one for the full
+/// exchange budget. The handshake gets its own, much shorter deadline.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 /// Caps concurrent inbound sessions so a peer, or anything that reached the
 /// port, cannot exhaust file descriptors by opening connections it never uses.
 const MAX_INFLIGHT: usize = 8;
@@ -209,7 +213,7 @@ async fn serve(
     max_bytes: u64,
     last_digest: Arc<Mutex<Option<String>>>,
 ) -> Result<()> {
-    let mut tls = timeout(EXCHANGE_TIMEOUT, acceptor.accept(stream)).await??;
+    let mut tls = timeout(HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await??;
     let payload = timeout(EXCHANGE_TIMEOUT, proto::read_payload(&mut tls, max_bytes)).await??;
     let digest = payload.digest();
 
@@ -270,18 +274,27 @@ async fn watch_loop(
         let payload = Payload::text(&text);
         let digest = payload.digest();
         {
-            let mut guard = last_digest.lock().await;
+            let guard = last_digest.lock().await;
             if guard.as_deref() == Some(digest.as_str()) {
                 continue;
             }
-            *guard = Some(digest);
         }
 
+        let mut delivered = cfg.peers.is_empty();
         for peer in &cfg.peers {
             let (host, port) = config::split_host_port(peer, cfg.port);
-            if let Err(err) = push(&host, port, &connector, &payload).await {
-                log::debug!("could not push to {peer}: {err}");
+            match push(&host, port, &connector, &payload).await {
+                Ok(()) => delivered = true,
+                Err(err) => log::debug!("could not push to {peer}: {err}"),
             }
+        }
+
+        // Only remember it once somebody actually took it. Recording the digest
+        // up front meant a copy made while the peer was asleep was skipped
+        // forever, because the next tick saw the same unchanged clipboard.
+        if delivered {
+            let mut guard = last_digest.lock().await;
+            *guard = Some(digest);
         }
     }
 }
@@ -293,7 +306,7 @@ async fn push(host: &str, port: u16, connector: &TlsConnector, payload: &Payload
     // The certificate fingerprint is the identity that matters here, so the
     // name only has to be well formed; PinnedPeers ignores it deliberately.
     let name = rustls::pki_types::ServerName::try_from("crossover")?;
-    let mut tls = timeout(EXCHANGE_TIMEOUT, connector.connect(name, stream)).await??;
+    let mut tls = timeout(HANDSHAKE_TIMEOUT, connector.connect(name, stream)).await??;
 
     timeout(EXCHANGE_TIMEOUT, proto::write_payload(&mut tls, payload)).await??;
     timeout(EXCHANGE_TIMEOUT, proto::read_ack(&mut tls)).await??;

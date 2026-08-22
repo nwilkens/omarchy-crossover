@@ -30,20 +30,11 @@ jobs:
           node-version: "22"
       - run: node --test tests/*.test.mjs
 
-  # A documented path that follows a moving branch or "latest" is not bound to
-  # any reviewed revision. Catch that here rather than in review.
   pinning:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reject mutable install references
-        run: |
-          if grep -rn --include='*.md' --include='*.sh' --include='*.qml' \
-               -e 'omarchy-crossover/main/' -e 'releases/latest' . ; then
-            echo "::error::documented install paths must be pinned to a release tag"
-            exit 1
-          fi
-          echo "all documented install paths are pinned"
+      - run: python3 scripts/check-pinning.py
 
   manifest:
     runs-on: ubuntu-latest

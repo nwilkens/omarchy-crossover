@@ -7,12 +7,23 @@ set -euo pipefail
 CROSSOVER_VERSION="v0.3.0"
 SELF_URL="https://raw.githubusercontent.com/nwilkens/omarchy-crossover/$CROSSOVER_VERSION/scripts/open-firewall.sh"
 
-SUBNET="${1:-}"
+# Strict parsing on purpose: this script edits a firewall. A mistyped
+# "-remove" that silently fell through to the open path would re-expose the
+# ports of someone who was trying to close them.
+SUBNET=""
 REMOVE=0
-if [[ ${2:-} == "--remove" || ${1:-} == "--remove" ]]; then
-  REMOVE=1
-  [[ ${1:-} == "--remove" ]] && SUBNET="${2:-}"
-fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --remove) REMOVE=1; shift ;;
+    -*) echo "unknown option: $1" >&2; exit 1 ;;
+    *)
+      if [[ -n $SUBNET ]]; then
+        echo "unexpected extra argument: $1" >&2
+        exit 1
+      fi
+      SUBNET="$1"; shift ;;
+  esac
+done
 
 if [[ -z $SUBNET ]]; then
   cat >&2 <<USAGE
@@ -22,7 +33,7 @@ usage: open-firewall.sh <subnet> [--remove]
   open-firewall.sh 192.168.1.0/24            # open the ports
   open-firewall.sh 192.168.1.0/24 --remove   # take the rules back out
 
-Find yours with: ip -4 -o addr show | awk '{print \$2, \$4}'
+Find yours with: ip -4 -o addr show | awk '{print $2, $4}'
 USAGE
   exit 1
 fi

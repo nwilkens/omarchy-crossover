@@ -50,9 +50,11 @@ Panel {
     "curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/"
     + releaseTag + "/scripts/install-macos.sh | bash -s -- " + setupHost
 
+  // Only clamps; it must never steer focus. It used to jump to "approve"
+  // whenever a fingerprint was pending, and because activateCursor() calls it
+  // first, any machine on the network could make the user's next Enter grant
+  // it keyboard control of this desktop.
   function ensureCursor() {
-    if (!crossover.installed) { focusSection = "install"; return }
-    if (crossover.pendingFingerprint !== "") { focusSection = "approve"; return }
     if (crossover.peers.length === 0 && focusSection === "peers") focusSection = "add"
     if (peerIndex >= crossover.peers.length) peerIndex = Math.max(0, crossover.peers.length - 1)
     if (peerIndex < 0) peerIndex = 0
@@ -101,7 +103,14 @@ Panel {
     switch (focusSection) {
       case "install": copyText(root.installCommand); break
       case "header": crossover.toggleDaemon(); break
-      case "approve": crossover.authorize(crossover.pendingFingerprint, "crossover peer"); break
+      // Trusting another machine is never a side effect of a keypress aimed at
+      // something else: it only happens when the cursor is deliberately on the
+      // approval card.
+      case "approve":
+        if (crossover.pendingFingerprint !== "") {
+          crossover.authorize(crossover.pendingFingerprint, "crossover peer")
+        }
+        break
       case "peers":
         var peer = selectedPeer()
         if (peer) crossover.activate(peer.handle, !peer.active)
@@ -183,6 +192,7 @@ Panel {
 
   onOpenedChanged: if (opened) {
     cursorActive = false
+    focusSection = crossover.installed ? "header" : "install"
     // Reopening starts clean: a half-typed hostname left over from last time
     // is confusing and hides the row it replaced.
     addingPeer = false
@@ -196,6 +206,11 @@ Panel {
     id: crossover
     settings: root.settings
   }
+
+  // Disabling or removing the plugin has to take the daemons with it. Without
+  // this, the documented removal left crossover-clipd bound to its port and
+  // still replicating the clipboard to paired peers.
+  Component.onDestruction: crossover.stop()
 
   SeamIndicator {
     position: crossover.enteredPosition
@@ -530,7 +545,7 @@ Panel {
                   fontFamily: root.fontFamily
                   fontSize: Style.font.bodySmall
                   bordered: true
-                  onClicked: crossover.pendingFingerprint = ""
+                  onClicked: crossover.dismissPending()
                 }
               }
             }
