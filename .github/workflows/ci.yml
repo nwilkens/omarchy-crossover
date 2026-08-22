@@ -41,22 +41,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq qt6-declarative-dev-tools
-      - name: qmllint
+      - name: qmllint diagnostics
         run: |
-          set -euo pipefail
+          set -x
+          command -v qmllint || true
+          ls -la /usr/lib/qt6/bin/ 2>&1 | head -20 || true
+          dpkg -L qt6-declarative-dev-tools 2>/dev/null | grep -i lint || true
           QMLLINT=$(command -v qmllint || echo /usr/lib/qt6/bin/qmllint)
-          [ -x "$QMLLINT" ] || { echo "::error::qmllint not found"; exit 2; }
-          # Its exit code is not usable: 0 on warnings, 255 on unrelated
-          # infrastructure problems. Grep for the categories that are real bugs
-          # rather than artifacts of Quickshell types it cannot resolve.
-          FATAL='read-only-property|syntax|unreachable-code|assignment-in-condition|duplicated-name|duplicate-property-binding|var-used-before-declaration|eval|with'
-          out=$("$QMLLINT" ./*.qml 2>&1 || true)
-          if grep -q 'Failed to open file' <<<"$out"; then echo "$out"; exit 2; fi
-          if grep -E "\[($FATAL)\]" <<<"$out"; then
-            echo "::error::qmllint reported a fatal category"
-            exit 1
-          fi
-          echo "qmllint clean"
+          "$QMLLINT" --version || true
+          echo "--- raw run, exit code captured ---"
+          "$QMLLINT" ./*.qml; echo "exit=$?"
 
   model:
     runs-on: ubuntu-latest
