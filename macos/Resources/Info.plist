@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Crossover</string>
+  <key>CFBundleDisplayName</key><string>Crossover</string>
+  <key>CFBundleIdentifier</key><string>com.nwilkens.crossover</string>
+  <key>CFBundleExecutable</key><string>Crossover</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+  <key>CFBundleVersion</key><string>__VERSION__</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <!-- Menu bar only: no Dock icon, no main window. -->
+  <key>LSUIElement</key><true/>
+  <key>NSHumanReadableCopyright</key><string>MIT. Bundles lan-mouse (GPL-3.0); see Resources.</string>
+  <!-- macOS 15+ gates outbound LAN traffic behind this, and without the
+       string the prompt has nothing to say. -->
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Crossover sends your mouse, keyboard, and clipboard to the machine you paired with on this network.</string>
+</dict>
+</plist>

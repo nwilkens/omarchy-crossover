@@ -67,6 +67,15 @@ jobs:
           fi
           echo "qmllint: no readonly writes"
 
+  # The Mac app is only buildable on macOS, and nothing else in CI would catch
+  # a compile error in it.
+  macapp:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: swift build --package-path macos
+      - run: shellcheck macos/build/*.sh
+
   model:
     runs-on: ubuntu-latest
     steps:

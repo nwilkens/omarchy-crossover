@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Crossover Input</string>
+  <key>CFBundleDisplayName</key><string>Crossover Input</string>
+  <key>CFBundleIdentifier</key><string>com.nwilkens.crossover.input</string>
+  <key>CFBundleExecutable</key><string>lan-mouse</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>__LAN_MOUSE_VERSION__</string>
+  <key>CFBundleVersion</key><string>__LAN_MOUSE_VERSION__</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>LSUIElement</key><true/>
+  <!-- This is the bundle that installs the event tap, so this is the name the
+       user sees in Privacy & Security, and the identity TCC records. -->
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Crossover sends your mouse and keyboard to the machine you paired with on this network.</string>
+</dict>
+</plist>

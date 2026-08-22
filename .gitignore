@@ -1,3 +1,5 @@
 clipd/target/
 *.qmlc
 *.jsc
+macos/.build/
+macos/build/out/
