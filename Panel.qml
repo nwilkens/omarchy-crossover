@@ -43,8 +43,12 @@ Panel {
   }
   readonly property string installCommand: "sudo pacman -S lan-mouse"
   readonly property string setupHost: crossover.localAddress !== "" ? crossover.localAddress : "<this-machine-ip>"
+  // Pinned to a release tag rather than a branch so the command the panel hands
+  // out installs a fixed, checksummed revision. Bump alongside manifest.json.
+  readonly property string releaseTag: "v0.3.0"
   readonly property string macSetupCommand:
-    "curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh | bash -s -- " + setupHost
+    "curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/"
+    + releaseTag + "/scripts/install-macos.sh | bash -s -- " + setupHost
 
   function ensureCursor() {
     if (!crossover.installed) { focusSection = "install"; return }

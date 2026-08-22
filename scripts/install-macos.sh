@@ -1,16 +1,29 @@
 #!/usr/bin/env bash
-# Sets up the Mac half of Crossover end to end: Lan Mouse for input, the
-# clipboard helper, and the pairing between them. Needs no Rust toolchain.
+# Sets up the Mac half of Crossover: Lan Mouse for input, the clipboard helper,
+# and the pairing between them. Needs no Rust toolchain.
+#
+# Every download is pinned to an immutable tag and checked against a SHA-256
+# published at that same tag, so what this installs is exactly what was
+# reviewed. Nothing here follows a moving branch or a "latest" release.
 #
 # Safe to run piped:
-#   curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh \
+#   curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/install-macos.sh \
 #     | bash -s -- 10.0.5.1
 #   ...add --ssh you@10.0.5.1 to pair both machines automatically.
+#
+# Undo everything with scripts/uninstall-macos.sh, documented in the README.
 set -euo pipefail
 
-SELF_URL="https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh"
+CROSSOVER_VERSION="v0.3.0"
 LAN_MOUSE_VERSION="v0.11.0"
-CLIPD_REPO="nwilkens/omarchy-crossover"
+REPO="nwilkens/omarchy-crossover"
+SELF_URL="https://raw.githubusercontent.com/$REPO/$CROSSOVER_VERSION/scripts/install-macos.sh"
+
+# Pinned upstream artifacts. Recorded here so a tampered or swapped release
+# fails loudly instead of installing.
+LAN_MOUSE_SHA_ARM64="5ff9965d05be7f125b1d75b9e7259d874ec98aa086ce40012522bc25406500a9"
+LAN_MOUSE_SHA_INTEL="d24c38ccf50061ab710826003c19d10e1243415ffa18f421d4498b2b858c8b64"
+
 APP="/Applications/Lan Mouse.app"
 CLIPD="$HOME/.local/bin/crossover-clipd"
 AGENTS="$HOME/Library/LaunchAgents"
@@ -39,6 +52,8 @@ usage: install-macos.sh <omarchy-host-or-ip> [--ssh user@host] [--position left|
   --ssh                 pair both machines automatically over ssh
   --position            which side the Omarchy machine sits on, seen from this
                         Mac (default: left)
+
+Removal: scripts/uninstall-macos.sh, or see the README's "Removing it".
 USAGE
   exit 1
 fi
@@ -50,13 +65,24 @@ esac
 
 say() { printf '\n==> %s\n' "$1"; }
 
+verify_sha256() {
+  local file="$1" expected="$2" actual
+  actual=$(shasum -a 256 "$file" | cut -d' ' -f1)
+  if [[ $actual != "$expected" ]]; then
+    echo "checksum mismatch for $file" >&2
+    echo "  expected $expected" >&2
+    echo "  got      $actual" >&2
+    exit 1
+  fi
+}
+
 # ---------------------------------------------------------------- Lan Mouse
 if [[ -d $APP ]]; then
   say "Lan Mouse is already installed"
 else
   case "$(uname -m)" in
-    arm64) ASSET="lan-mouse-macos-arm64.zip" ;;
-    x86_64) ASSET="lan-mouse-macos-intel.zip" ;;
+    arm64) ASSET="lan-mouse-macos-arm64.zip"; ASSET_SHA="$LAN_MOUSE_SHA_ARM64" ;;
+    x86_64) ASSET="lan-mouse-macos-intel.zip"; ASSET_SHA="$LAN_MOUSE_SHA_INTEL" ;;
     *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
   esac
 
@@ -65,6 +91,7 @@ else
   trap 'rm -rf "$TMP"' EXIT
   curl -fsSL -o "$TMP/lan-mouse.zip" \
     "https://github.com/feschber/lan-mouse/releases/download/$LAN_MOUSE_VERSION/$ASSET"
+  verify_sha256 "$TMP/lan-mouse.zip" "$ASSET_SHA"
   unzip -q "$TMP/lan-mouse.zip" -d "$TMP"
   cp -R "$TMP/Lan Mouse.app" /Applications/
   # The upstream build is ad-hoc signed, so Gatekeeper refuses it until the
@@ -73,32 +100,43 @@ else
   xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
 fi
 
-LAN_MOUSE_BIN="$APP/Contents/MacOS/lan-mouse"
-
 # ------------------------------------------------------------ clipboard helper
 if [[ -x $CLIPD ]]; then
   say "Clipboard helper is already installed"
 else
-  say "Installing the clipboard helper"
+  say "Installing the clipboard helper $CROSSOVER_VERSION"
   mkdir -p "$(dirname "$CLIPD")"
   case "$(uname -m)" in
     arm64) CLIPD_ASSET="crossover-clipd-aarch64-macos" ;;
     *) CLIPD_ASSET="crossover-clipd-x86_64-macos" ;;
   esac
-  URL="https://github.com/$CLIPD_REPO/releases/latest/download/$CLIPD_ASSET"
-  if curl -fsSL -o "$CLIPD" "$URL"; then
+  BASE="https://github.com/$REPO/releases/download/$CROSSOVER_VERSION"
+
+  if curl -fsSL -o "$CLIPD.part" "$BASE/$CLIPD_ASSET"; then
+    # The checksums live at the same immutable tag as the binary.
+    SUMS=$(curl -fsSL "$BASE/SHA256SUMS")
+    EXPECTED=$(printf '%s\n' "$SUMS" | awk -v a="$CLIPD_ASSET" '$2 == a || $2 == "*"a {print $1}')
+    if [[ -z $EXPECTED ]]; then
+      rm -f "$CLIPD.part"
+      echo "no checksum published for $CLIPD_ASSET at $CROSSOVER_VERSION" >&2
+      exit 1
+    fi
+    verify_sha256 "$CLIPD.part" "$EXPECTED"
+    mv "$CLIPD.part" "$CLIPD"
     chmod +x "$CLIPD"
     xattr -dr com.apple.quarantine "$CLIPD" 2>/dev/null || true
   elif command -v cargo >/dev/null; then
     # Piped through bash there is no script directory to build from, so the
-    # source is fetched rather than assumed to be next to us.
+    # source is fetched at the same pinned tag rather than a moving branch.
+    rm -f "$CLIPD.part"
     echo "No release build available, compiling from source."
     SRC=$(mktemp -d)
-    git clone --depth 1 "https://github.com/$CLIPD_REPO.git" "$SRC/repo"
+    git clone --depth 1 --branch "$CROSSOVER_VERSION" "https://github.com/$REPO.git" "$SRC/repo"
     cargo install --path "$SRC/repo/clipd" --root "$HOME/.local"
     rm -rf "$SRC"
   else
-    echo "Could not download $URL and cargo is not installed." >&2
+    rm -f "$CLIPD.part"
+    echo "Could not download $BASE/$CLIPD_ASSET and cargo is not installed." >&2
     exit 1
   fi
 fi
@@ -207,7 +245,17 @@ launchctl load "$AGENTS/$LABEL_CLIP.plist"
 say "Opening Lan Mouse"
 open -a "$APP" || true
 
-cat <<'DONE'
+cat <<DONE
+
+Installed:
+  $APP
+  $CLIPD
+  $AGENTS/$LABEL_CLIP.plist
+  ~/.config/lan-mouse/config.toml
+  ~/.config/crossover/  (identity and paired fingerprints)
+
+To remove all of it later:
+  curl -fsSL https://raw.githubusercontent.com/$REPO/$CROSSOVER_VERSION/scripts/uninstall-macos.sh | bash
 
 One thing left, and only you can do it.
 

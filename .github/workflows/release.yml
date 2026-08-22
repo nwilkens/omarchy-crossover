@@ -45,7 +45,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
+      # Published so the installer can verify what it downloads against a file
+      # that lives at the same immutable tag.
+      - name: Generate checksums
+        run: sha256sum crossover-clipd-* | tee SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
-          files: crossover-clipd-*
+          files: |
+            crossover-clipd-*
+            SHA256SUMS
           generate_release_notes: true

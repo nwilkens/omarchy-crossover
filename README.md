@@ -46,11 +46,11 @@ omarchy plugin enable nwilkens.crossover --section right
 sudo pacman -S lan-mouse
 
 # 2. On Omarchy: open the ports on your LAN (ufw blocks them by default)
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/open-firewall.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/open-firewall.sh \
   | bash -s -- 192.168.1.0/24
 
 # 3. On the Mac: everything, in one line
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/install-macos.sh \
   | bash -s -- <omarchy-ip> --ssh you@<omarchy-ip>
 ```
 
@@ -80,13 +80,23 @@ The plugin cannot install binaries: `omarchy plugin add` deliberately never
 runs an install hook. Grab a release build, or compile it yourself:
 
 ```bash
-# prebuilt
-curl -sSL https://github.com/nwilkens/omarchy-crossover/releases/latest/download/crossover-clipd-x86_64-linux \
-  -o ~/.cargo/bin/crossover-clipd && chmod +x ~/.cargo/bin/crossover-clipd
+# prebuilt, pinned to a release tag and checked against the SHA256SUMS
+# published at that same tag
+V=v0.3.0
+BASE=https://github.com/nwilkens/omarchy-crossover/releases/download/$V
+mkdir -p ~/.local/bin
+curl -fsSL "$BASE/crossover-clipd-x86_64-linux" -o ~/.local/bin/crossover-clipd
+curl -fsSL "$BASE/SHA256SUMS" | grep crossover-clipd-x86_64-linux \
+  | sed 's#crossover-clipd-x86_64-linux#'"$HOME"'/.local/bin/crossover-clipd#' | sha256sum -c -
+chmod +x ~/.local/bin/crossover-clipd
 
-# or from source
+# or from source, from the same tag
 cargo install --path ~/.config/omarchy/plugins/nwilkens.crossover/clipd
 ```
+
+Nothing here follows `main` or `latest`: the install command, the helper
+binary, and its checksum all come from one immutable tag, so what you run is
+the revision that was reviewed.
 
 ## Open the ports first
 
@@ -128,7 +138,7 @@ setup script installs a LaunchAgent.
 One command on the Mac. No repo to clone, no Rust toolchain, no compiling:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/main/scripts/install-macos.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/install-macos.sh \
   | bash -s -- 10.0.5.1 --ssh you@10.0.5.1
 ```
 
@@ -238,6 +248,49 @@ last line of its stderr, and offers a retry button instead of looping forever.
 A helper left running by a previous shell is adopted rather than fought with,
 which otherwise shows up as a clipboard that refuses to start because the port
 is already bound.
+
+## Removing it
+
+Nothing here is hidden, and all of it comes back out.
+
+**On Omarchy**
+
+```bash
+omarchy plugin remove nwilkens.crossover     # stops the daemons it manages
+sudo pacman -Rns lan-mouse                   # only if you want lan-mouse gone
+rm -f ~/.local/bin/crossover-clipd ~/.cargo/bin/crossover-clipd
+rm -rf ~/.config/crossover                   # identity and paired fingerprints
+```
+
+If you opened the firewall, take those rules back out with the same script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/open-firewall.sh \
+  | bash -s -- 192.168.1.0/24 --remove
+```
+
+Peers you added live in `~/.config/lan-mouse/config.toml`; delete it if you are
+removing lan-mouse too. The Mac keyboard rule is applied at runtime and is gone
+the moment the plugin stops, so there is nothing to undo in your Hyprland
+config.
+
+**On the Mac**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/uninstall-macos.sh \
+  | bash -s -- --yes
+```
+
+That unloads and deletes both LaunchAgents, kills the processes, removes
+`/Applications/Lan Mouse.app` and `~/.local/bin/crossover-clipd`, restores any
+lan-mouse config it replaced, and clears its logs. Run it without `--yes` from
+a terminal to be asked before the app and your paired identity are deleted, or
+pass `--keep-lan-mouse` to leave the app in place.
+
+Two things a script is not allowed to do for you: macOS keeps the
+**Accessibility** and **Input Monitoring** entries after an app is deleted, so
+remove "Lan Mouse" by hand under System Settings > Privacy & Security, and
+remove it from **Login Items** if you added it there.
 
 ## Security
 
