@@ -7,14 +7,14 @@
 # reviewed. Nothing here follows a moving branch or a "latest" release.
 #
 # Safe to run piped:
-#   curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/install-macos.sh \
+#   curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/install-macos.sh \
 #     | bash -s -- 10.0.5.1
 #   ...add --ssh you@10.0.5.1 to pair both machines automatically.
 #
 # Undo everything with scripts/uninstall-macos.sh, documented in the README.
 set -euo pipefail
 
-CROSSOVER_VERSION="v0.3.0"
+CROSSOVER_VERSION="v0.4.0"
 LAN_MOUSE_VERSION="v0.11.0"
 REPO="nwilkens/omarchy-crossover"
 SELF_URL="https://raw.githubusercontent.com/$REPO/$CROSSOVER_VERSION/scripts/install-macos.sh"

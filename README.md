@@ -44,14 +44,14 @@ omarchy plugin enable nwilkens.crossover --section right
 sudo pacman -S lan-mouse
 
 # 2. On Omarchy: open the ports on your LAN (ufw blocks them by default)
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/open-firewall.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/open-firewall.sh \
   | bash -s -- 192.168.1.0/24
 
 # 3. On Omarchy: the clipboard helper, if you want a shared clipboard
 #    (see "The clipboard helper" below for the checksum-verified commands)
 
 # 4. On the Mac: everything else, in one line
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/install-macos.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/install-macos.sh \
   | bash -s -- <omarchy-ip>
 ```
 
@@ -84,7 +84,7 @@ checkout tracks `main` and `omarchy plugin update` fast-forwards it. To fix the
 plugin at a reviewed revision, pin the checkout with git afterwards:
 
 ```bash
-git -C ~/.config/omarchy/plugins/nwilkens.crossover checkout v0.3.0
+git -C ~/.config/omarchy/plugins/nwilkens.crossover checkout v0.4.0
 ```
 
 ### The clipboard helper (Omarchy side)
@@ -97,7 +97,7 @@ corrupt or substituted file is never installed:
 
 ```bash
 set -e
-V=v0.3.0
+V=v0.4.0
 BASE=https://github.com/nwilkens/omarchy-crossover/releases/download/$V
 TMP=$(mktemp -d)
 curl -fsSL "$BASE/crossover-clipd-x86_64-linux" -o "$TMP/crossover-clipd"
@@ -111,7 +111,7 @@ rm -rf "$TMP"
 Or from source at the same tag:
 
 ```bash
-git clone --branch v0.3.0 --depth 1 https://github.com/nwilkens/omarchy-crossover.git /tmp/crossover-src
+git clone --branch v0.4.0 --depth 1 https://github.com/nwilkens/omarchy-crossover.git /tmp/crossover-src
 cargo install --path /tmp/crossover-src/clipd --locked
 ```
 
@@ -162,7 +162,7 @@ setup script installs a LaunchAgent.
 One command on the Mac. No repo to clone, no Rust toolchain, no compiling:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/install-macos.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/install-macos.sh \
   | bash -s -- 10.0.5.1
 ```
 
@@ -295,7 +295,7 @@ it exits.
 If you opened the firewall, take those rules back out with the same script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/open-firewall.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/open-firewall.sh \
   | bash -s -- 192.168.1.0/24 --remove
 ```
 
@@ -310,7 +310,7 @@ config.
 **On the Mac**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.3.0/scripts/uninstall-macos.sh \
+curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.4.0/scripts/uninstall-macos.sh \
   | bash -s -- --yes
 ```
 

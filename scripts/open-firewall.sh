@@ -4,7 +4,7 @@
 # peer that is simply not answering, so this is worth doing up front.
 set -euo pipefail
 
-CROSSOVER_VERSION="v0.3.0"
+CROSSOVER_VERSION="v0.4.0"
 SELF_URL="https://raw.githubusercontent.com/nwilkens/omarchy-crossover/$CROSSOVER_VERSION/scripts/open-firewall.sh"
 
 # Strict parsing on purpose: this script edits a firewall. A mistyped
