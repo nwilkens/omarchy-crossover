@@ -22,7 +22,7 @@ jobs:
             name: crossover-clipd-x86_64-macos
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwayland-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -31,7 +31,7 @@ jobs:
       - run: cargo build --locked --release --target ${{ matrix.target }}
         working-directory: clipd
       - run: cp clipd/target/${{ matrix.target }}/release/crossover-clipd ${{ matrix.name }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}
@@ -46,7 +46,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
       # Published so the installer can verify what it downloads against a file
@@ -60,7 +60,7 @@ jobs:
         with:
           subject-checksums: SHA256SUMS
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
             crossover-clipd-*
