@@ -162,13 +162,26 @@ if [[ -f $CONFIG ]] && ! grep -q "written by crossover" "$CONFIG"; then
   cp "$CONFIG" "$CONFIG.bak-crossover"
   echo "Kept your previous config at $CONFIG.bak-crossover"
 fi
+
+# A literal IP address is a snapshot of a DHCP lease, and it goes stale the
+# moment the router hands out a new one. A hostname is re-resolved by
+# lan-mouse on every activation, so it survives that. lan-mouse's `ips` field
+# is a strict IpAddr list: writing a hostname into it is a hard parse error
+# that crashes the daemon outright, so which key gets used matters, not just
+# which value.
+if [[ $PEER_HOST =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || [[ $PEER_HOST == *:* ]]; then
+  PEER_KEY="ips = [\"$PEER_HOST\"]"
+else
+  PEER_KEY="hostname = \"$PEER_HOST\""
+fi
+
 cat > "$CONFIG" <<CONF
 # written by crossover
 port = 4242
 
 [[clients]]
 position = "$POSITION"
-ips = ["$PEER_HOST"]
+$PEER_KEY
 activate_on_startup = true
 CONF
 
