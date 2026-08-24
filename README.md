@@ -26,11 +26,11 @@ curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.5.0/s
 
 # On the Mac
 curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.5.0/scripts/install-macos.sh \
-  | bash -s -- <omarchy-ip>
+  | bash -s -- omarchy.local
 ```
 
 For the shared clipboard, install the helper on Omarchy first (below), then
-add `--ssh you@<omarchy-ip>` to the Mac command and it pairs both directions.
+add `--ssh you@omarchy.local` to the Mac command and it pairs both directions.
 
 Open the panel from the bar and it shows you that last command with your own
 address already in it.
@@ -101,15 +101,23 @@ crossover-clipd add-peer <other-machine-address>
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.5.0/scripts/install-macos.sh \
-  | bash -s -- 10.0.5.1
+  | bash -s -- omarchy.local
 ```
+
+The panel shows you this exact line under **Set up another machine**, with
+your machine's own hostname already in it.
+
+Prefer the `.local` hostname over a bare IP, including if you type it in by
+hand. Omarchy runs avahi by default, so the hostname keeps resolving after
+your router hands out a new DHCP lease; a literal IP is a snapshot of the one
+you had at setup time and goes stale the moment that happens.
 
 That pulls the official `Lan Mouse.app`, checks it against a hash recorded in
 the script, clears the Gatekeeper quarantine flag that otherwise makes an
 ad-hoc signed app look broken, installs the clipboard helper with a LaunchAgent,
 and points Lan Mouse at your Omarchy box.
 
-`--ssh you@10.0.5.1` pairs the clipboard both ways over ssh instead of making
+`--ssh you@omarchy.local` pairs the clipboard both ways over ssh instead of making
 you copy fingerprints around. It runs `crossover-clipd` on the Omarchy machine,
 so install the helper there first. It also writes pairing state there.
 
@@ -194,6 +202,14 @@ retry button rather than looping.
 A helper left behind by a previous shell gets adopted instead of fought with,
 which otherwise looks like a clipboard that won't start because the port is
 taken.
+
+**If your router hands out a new DHCP lease while paired by hostname**, the
+clipboard self-heals with no action needed: it resolves the hostname fresh on
+every send. The input channel is less automatic — lan-mouse only re-resolves a
+peer's hostname when you activate it, edit it, or hit refresh, not on a timer
+mid-session, so toggle the machine off and back on in the panel if input stops
+responding after an address change. This is why pairing by hostname rather
+than a bare IP matters even though it isn't a complete fix on its own.
 
 ## Removing it
 

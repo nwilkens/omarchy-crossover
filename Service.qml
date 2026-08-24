@@ -450,8 +450,15 @@ Item {
   onLinkedChanged: if (linked && lastError.indexOf("lan-mouse") === 0) lastError = ""
 
   Component.onCompleted: {
+    // Preferred over the local IP: avahi is enabled by default on Omarchy and
+    // publishes <hostname>.local, which keeps resolving after a DHCP lease
+    // changes. The bare IP is only a fallback for the uncommon case where
+    // avahi is not running, since a raw address goes stale the next lease
+    // renewal and is exactly the failure this exists to avoid.
     addressProcess.command = ["sh", "-c",
-      "ip -4 -o route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \\([0-9.]*\\).*/\\1/p' | head -1"]
+      "if systemctl is-active --quiet avahi-daemon 2>/dev/null; then " +
+      "echo \"$(hostname).local\"; else " +
+      "ip -4 -o route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \\([0-9.]*\\).*/\\1/p' | head -1; fi"]
     addressProcess.running = true
     kbOptionsProcess.command = ["hyprctl", "getoption", "input:kb_options"]
     kbOptionsProcess.running = true

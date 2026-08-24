@@ -8,8 +8,8 @@
 #
 # Safe to run piped:
 #   curl -fsSL https://raw.githubusercontent.com/nwilkens/omarchy-crossover/v0.5.0/scripts/install-macos.sh \
-#     | bash -s -- 10.0.5.1
-#   ...add --ssh you@10.0.5.1 to pair both machines automatically.
+#     | bash -s -- omarchy.local
+#   ...add --ssh you@omarchy.local to pair both machines automatically.
 #
 # Undo everything with scripts/uninstall-macos.sh, documented in the README.
 set -euo pipefail
